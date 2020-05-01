@@ -24,6 +24,7 @@ STUTTERING_JUDGE = 'Stuttering Judge'
 # ONE_OF_THE_TWO_SISTERS = 'One of the Two Sisters'
 RAVEN = 'Raven'
 SCAPEGOAT = 'Scapegoat'
+# Wild child?
 
 STANDARD_SPECIAL_VILLAGERS = [
     DOCTOR,
@@ -55,19 +56,25 @@ ROLE_DESCRIPTIONS = {
     FORTUNE_TELLER: 'You are a villager, but you will be woken up alone by the moderator each night and choose someone to inspect.  The moderator will indicate whether that person is a werewolf. Your goal is to eliminate all werewolves.',
     ANCIENT: 'You are a villager, who will not die the first time the werewolves target you.  However, if any villager, like the Witch, kills you, or the townspeople vote to kill you, all villagers lose their powers.',
     ACTOR: 'You are a villager, but the moderator has chosen three other special roles for you, all unknown to you.  Each night, you will be woken up by the moderator and can elect to randomly receive one of those roles, to be used until the following night.  However, a role is used up once you receive it, so you can use your power a maximum of three times.',
-    STUTTERING_JUDGE: 'You are a villager. One time during the game, you may secretly signal to the moderator that a second discussion and vote should be held immediately afterward, to kill a second person.',
-    # ONE_OF_THE_TWO_SISTERS: 'You are a villager, but you will be shown the identity of your sister, who is also a villager, allowing you two to trust each other.',
+    STUTTERING_JUDGE: 'You are a villager. One time during the game, you may secretly signal to the moderator that a second discussion and vote should be held immediately after the current one.',
+    # ONE_OF_THE_TWO_SISTERS: 'You are a villager, but at the beginning of the game you will be shown the identity of your sister, who is also a villager, allowing you two to trust each other.',
     RAVEN: 'You are a villager.  Each night, the moderator will wake you up and ask who you would like to curse with two votes for the following day. You may not curse yourself.',
     SCAPEGOAT: 'You are a villager. In the event that voting ever results in a tie when you are alive, you die and voting for the round ends. However, your revenge, if you die this way, is that you choose someone to not be allowed to vote the following day.',
     BIG_BAD_WEREWOLF: 'You are a werewolf, but an extremely powerful one.  As long as no werewolves have been eliminated, the moderator will wake you up a second time at night, alone, and you will choose another player to kill.',
     CURSED_WOLF_FATHER: 'You are a werewolf with a special twist. One time during the game, you may secretly signal to the moderator that the target you and the other werewolves picked to kill will become a werewolf instead of dying.',
 }
 
+# This accessory groups are needed for setting up private channels with the moderator
+ALL_SPECIAL_VILLAGERS = STANDARD_SPECIAL_VILLAGERS + ADVANCED_SPECIAL_VILLAGERS
+ALL_WEREWOLVES = [WEREWOLF, *SPECIAL_WEREWOLVES]
+
 # Notes for moderator about who has to wake up and things to keep track of?
 
 assert len(ROLE_DESCRIPTIONS) == len(STANDARD_SPECIAL_VILLAGERS) + len(ADVANCED_SPECIAL_VILLAGERS) + len(SPECIAL_WEREWOLVES) + 2
 
-WEREWOLF_CHANNEL_ID = 'C011ANJ5X17'
+VILLAGE_CHANNEL_ID = 'C012NRD42DR'
+WEREWOLVES_CHANNEL_ID = 'G012P9CA6RL'
+BOT_MEMBER_ID = 'U012S2HU6H3'
 
 
 def get_boolean_input(prompt, help_label=None, help_text=None):
@@ -85,6 +92,7 @@ def get_boolean_input(prompt, help_label=None, help_text=None):
 
 
 def get_int_input(prompt, lower_bound=0, upper_bound=float('+inf')):
+    assert upper_bound >= lower_bound, "Your bounds are not valid"
     while True:
         try:
             result = int(input(prompt + '\n'))
@@ -94,59 +102,128 @@ def get_int_input(prompt, lower_bound=0, upper_bound=float('+inf')):
             print(f"Couldn't interpret input as an integer between {lower_bound} and {upper_bound}. Please try again.")
 
 
-def get_informative_name(client, member_id):
+def is_bot(client, member_id):
     player_info = client.users_info(user=member_id)
-    if player_info.data['user']['is_bot']:
-        return
+    return player_info.data['user']['is_bot']
+
+
+def get_display_name(client, member_id):
+    player_info = client.users_info(user=member_id)
+
     display_name = (player_info.data['user']['profile']['display_name']
         or player_info.data['user']['name'])
-    real_name = player_info.data['user']['profile']['real_name']
 
-    return f'@{display_name} ({real_name})'
+    return f'@{display_name}'
+
+def find_member_id_by_display_name(client, member):
+    members = client.conversations_members(channel=VILLAGE_CHANNEL_ID)
+
+    for member_id in members.data['members']:
+        if member_id == BOT_MEMBER_ID:
+            continue
+        if get_display_name(client, member_id) == member:
+            return member_id
+
+def find_im_by_member_id(client, member_id):
+    for im in client.conversations_list(types='im')['channels']:
+        if im['user'] == member_id:
+            return im['id']
+
+    raise Exception('No IM found for given member id')
+
+def archive_role_channels(client, exceptions=None):
+    if not exceptions:
+        exceptions = [WEREWOLVES_CHANNEL_ID]
+    for channel in client.conversations_list(types='private_channel').data['channels']:
+        if channel['id'] not in exceptions and not channel['is_archived']:
+            # Note that this will stop working November 2020
+            client.groups_archive(channel=channel['id'])
+
+def create_or_unarchive_private_channel(client, name, moderator_id):
+    name = name.lower().replace(' ', '_')
+    # If channel is archived, unarchive it
+    for channel in client.conversations_list(types='private_channel').data['channels']:
+        if channel['name'] == name:
+            if channel['is_archived']:
+                client.conversations_unarchive(channel=channel['id'], as_user=True)
+                remove_players_from_channel(client, channel['id'], moderator_id)
+            return channel['id']
+
+    creation_response = client.conversations_create(
+        name=name,
+        is_private=True,
+    )
+    return creation_response['channel']['id']
+
+def remove_players_from_channel(client, channel_id, moderator_id):
+    # Add the moderator if they are not already in channel. This prevents
+    # the channel from every having only bots in the event of a moderator
+    # change.
+    try:
+        client.conversations_invite(channel=channel_id, users=moderator_id)
+    except:
+        pass
+    members = client.conversations_members(channel=channel_id)
+
+    for member_id in members.data['members']:
+        if member_id not in (moderator_id, BOT_MEMBER_ID):
+            client.conversations_kick(channel=channel_id, user=member_id)
+
 
 
 
 def main():
     client = WebClient(token=API_TOKEN)
 
-    # Determine which members of the #werewolf channel are playing
+    # Determine which members of the main channel are playing
     print("Welcome to Werewolf!\n")
     print("Let's select the active players. Gathering potential player information from Slack...\n")
-    player_candidates = client.conversations_members(
-        channel=WEREWOLF_CHANNEL_ID
-    )
 
+    # Set a moderator
     moderator_id = None
     while not moderator_id:
-        raw = input("Please give the member ID of the moderator. This looks like U15EACZKP and can be found on their profile.\n")
-        if raw not in player_candidates.data['members']:
-            print("That member id is not found in the channel. Try again.")
-            continue
-        print(f"Ok, {get_informative_name(client, raw)} will be the moderator.\n")
-        moderator_id = raw
+        raw = input("Please give display name of the moderator, including the @, like '@Jane Doe' or '@steve'.\n")
+        moderator_id = find_member_id_by_display_name(client, raw)
 
+        if not moderator_id:
+            print("That person is not found in the #village channel. Try again.")
+            continue
+
+        print(f"Ok, {raw} will be the moderator.\n")
+
+    # Determine which members of the main channel are playing
     active_players = {}
+    everyone_playing = get_boolean_input("Is everyone else in the channel playing?")
+    player_candidates = client.conversations_members(
+        channel=VILLAGE_CHANNEL_ID
+    )
     for member_id in player_candidates.data['members']:
-        if member_id == moderator_id:
+        if member_id == moderator_id or is_bot(client, member_id):
             continue
 
-        # get rid of?
-        informative_name = get_informative_name(client, member_id)
-        if not informative_name: # This means bot
-            continue
-        # ask if you want all players in channel?
-        if get_boolean_input(f'Is {informative_name} playing?'):
-            active_players[member_id] = informative_name
+        display_name = get_display_name(client, member_id)
+        if everyone_playing or get_boolean_input(f'Is {display_name} playing?'):
+            active_players[member_id] = display_name
 
+    # Start configuring roles if there are enough players
     num_players = len(active_players)
+    if num_players < 4:
+        exit("You do not have enough players, sorry.")
 
     if get_boolean_input(f"Great. You have {num_players} players. Would you like a summary of all possible roles?"):
         print(json.dumps(ROLE_DESCRIPTIONS, indent=4))
 
+    # Set up werewolves. First pick special ones and then fill in with normal ones up to max allowed
+    max_num_wolves = (num_players - 1) // 2
+    print(f'Ok, time to configure the werewolves. The absolute maximum number of wolves I will allow is {max_num_wolves}.\n')
+
     roles = []
     special_werewolves = []
-    if get_boolean_input('Ok, time to configure the werewolves. Would you like to use special werewolves?'):
+    if get_boolean_input('Would you like to use special werewolves?'):
         for role in SPECIAL_WEREWOLVES:
+            if len(special_werewolves) == max_num_wolves:
+                print("You have used up all possible wolf slots. Moving on.\n")
+                break
             if get_boolean_input(
                     f'Would you like to include the {role}?',
                     help_label='desc',
@@ -156,82 +233,112 @@ def main():
 
     roles += special_werewolves
     num_special_wolves = len(special_werewolves)
-    max_num_werewolves = (num_players - 1) // 2
-    num_plain_wolves = get_int_input(
-        f'How many normal werewolves (between {int(not num_special_wolves)} and {max_num_werewolves - num_special_wolves}) would you like in addition to the {num_special_wolves} special one(s)?',
-        lower_bound=int(not num_special_wolves),
-        upper_bound=max_num_werewolves - num_special_wolves
-    )
+
+    num_plain_wolves = 0
+    if len(special_werewolves) < max_num_wolves:
+        lower_bound = int(not num_special_wolves)
+        upper_bound = max_num_wolves - num_special_wolves
+
+        if lower_bound == upper_bound:
+            num_plain_wolves = lower_bound
+        else:
+            num_plain_wolves = get_int_input(
+                f'How many normal werewolves (between {lower_bound} and {upper_bound}) would you like in addition to the {num_special_wolves} special one(s)?',
+                lower_bound=lower_bound,
+                upper_bound=upper_bound
+            )
+
     num_wolves = num_plain_wolves + num_special_wolves
     num_villagers = num_players - num_wolves
-    print(f"Ok. You have chosen {num_plain_wolves} plain werewolves and {num_special_wolves} special werewolves, leaving {num_villagers} villagers. Let's configure the villagers.")
+    print(f"Ok. You have chosen {num_plain_wolves} plain werewolve(s) and {num_special_wolves} special werewolve(s), leaving {num_villagers} villagers. Let's configure the villagers.\n")
 
-
+    # Set up the villagers. Pick any special roles you'd like, and then the
+    # remaining players will be plain villagers.
     possible_special_villagers = STANDARD_SPECIAL_VILLAGERS
     if get_boolean_input('Would you like to use advanced special villagers?'):
-        possible_special_villagers += ADVANCED_SPECIAL_VILLAGERS
+        possible_special_villagers = ALL_SPECIAL_VILLAGERS
 
     special_villagers = []
     for role in possible_special_villagers:
-        if len(special_villagers) < num_villagers and get_boolean_input(
+        if len(special_villagers) < num_villagers:
+            if get_boolean_input(
                 f'Would you like to include the {role}?',
                 help_label='desc',
                 help_text=ROLE_DESCRIPTIONS[role]
-        ):
-            special_villagers.append(role)
+            ):
+                special_villagers.append(role)
+        else:
+            break
 
         print(f'{num_villagers - len(special_villagers)} unassigned villagers remaining.\n')
 
     roles += special_villagers
 
     if len(special_villagers) == num_villagers:
-        print('All available villagers have been made special. Stopping configuration')
+        print('All available villagers have been made special. Moving on.\n')
 
     print(f'Ok, you have the following special villager roles: {special_villagers}.\n')
 
     # Angels and demons?
-    print(f'Configuration complete. Sending roles.')
+    print(f'Role selection complete. Reconfiguring Slack and sending roles.')
 
-    roles += [WEREWOLF] * num_wolves
+    # Add the plain roles to fill out the role list and randomly shuffle
+    roles += [WEREWOLF] * num_plain_wolves
     roles += [VILLAGER] * (num_players - len(roles))
     random.shuffle(roles)
 
+    # Clear werewolf channel of all but the moderator and the bot
+    remove_players_from_channel(client, WEREWOLVES_CHANNEL_ID, moderator_id)
+
+    # Archive role channels. Below we will unarchive only those needed.
+    archive_role_channels(client)
+
+    # Assign shuffled roles to active players, adding to the appropriate
+    # private groups and sending them a DM with ther role.
     assigned_roles = {}
     for idx, member_id in enumerate(active_players):
         assigned_role = roles[idx]
         assigned_roles[member_id] = assigned_role
-        # Get rid of summary?
-        summary_text = f'You are in a town of {num_players} members, of which {num_wolves} are werewolves. Everyone else is a villager, including the following special member(s): {special_villagers}.'
-        role_text = f'Your role is *{assigned_role}*: {ROLE_DESCRIPTIONS[assigned_role]}'
-        player_message = '\n'.join([summary_text, role_text, 'Good luck!'])
+        # summary_text = f'You are in a town of {num_players} members, of which {num_wolves} are werewolves. Everyone else is a villager, including the following special member(s): {special_villagers}.'
+        role_text = f'Your role is *{assigned_role}*. {ROLE_DESCRIPTIONS[assigned_role]}'
+        player_message = '\n'.join([role_text, 'Good luck!'])
 
-        # Should go to player
         client.chat_postMessage(
-            channel='D012RG18RGU',
-            text=player_message,
-            as_user=True
+            channel=find_im_by_member_id(client, member_id),
+            text=player_message
         )
 
-    # Should go to moderator
+        # Add werewolves to werewolf channel
+        if assigned_role in ALL_WEREWOLVES:
+            client.conversations_invite(channel=WEREWOLVES_CHANNEL_ID, users=member_id)
+
+        # Set up a dedicated line to the moderator for any special role.
+        if assigned_role in ALL_SPECIAL_VILLAGERS + SPECIAL_WEREWOLVES:
+            role_channel_id = create_or_unarchive_private_channel(
+                client,
+                assigned_role,
+                moderator_id
+            )
+            client.conversations_invite(
+                channel=role_channel_id,
+                users=','.join([member_id, moderator_id])
+            )
+
+    # Send role summary to moderator
     all_roles = '\n'.join([f'<@{mid}>: *{assigned_roles[mid]}*' for mid in active_players])
     client.chat_postMessage(
-        channel='D012RG18RGU',
-        text=f'All roles:\n {all_roles}',
-        as_user=True
+        channel=find_im_by_member_id(client, moderator_id),
+        text=f'All roles:\n {all_roles}'
     )
 
-    # Should go to werewolf channel
+    # High-level summary sent to village channel
     player_summary = '\n'.join([f'<@{mid}>' for mid in active_players])
-
-    role_summary_header= f'We will begin with *{num_wolves}* werewolves and *{num_villagers}* villagers, including the following special roles:\n'
-    special_roles_text = '\n'.join(f'\n*{role}*: {ROLE_DESCRIPTIONS[role]}' for role in (special_villagers + special_werewolves))
+    role_summary_header= f'We will begin with *{num_wolves}* werewolve(s) and *{num_villagers}* villagers, including the following special roles:\n'
+    special_roles_text = '\n'.join(f'\n~*{role}*~: {ROLE_DESCRIPTIONS[role]}' for role in (special_villagers + special_werewolves)) or 'None!'
     client.chat_postMessage(
-        channel='D012RG18RGU',
-        text=f"Starting a game, moderated by <@{moderator_id}>, with\n {player_summary}.\n {role_summary_header}{special_roles_text}",
-        as_user=True
+        channel=VILLAGE_CHANNEL_ID,
+        text=f"Starting a game, moderated by <@{moderator_id}>, with\n\n {player_summary}\n\n {role_summary_header}{special_roles_text}"
     )
-
-    # Start group chat with moderator and werewolves?
 
 if __name__ == '__main__':
     main()
