@@ -54,14 +54,14 @@ ROLE_DESCRIPTIONS = {
     WITCH: 'You are a villager, but you will be woken up alone by the moderator each night and choose to save someone and/or kill someone. However, you can do each of those only once per game. Your kill cannot be prevented by the doctor.  Your goal is to eliminate all werewolves.',
     HUNTER: 'You are a villager, but whenever you die, whether night or day, you must choose a second person to die with you, with no discussion. Your goal is to eliminate all werewolves.',
     FORTUNE_TELLER: 'You are a villager, but you will be woken up alone by the moderator each night and choose someone to inspect.  The moderator will indicate whether that person is a werewolf. Your goal is to eliminate all werewolves.',
-    ANCIENT: 'You are a villager, who will not die the first time the werewolves target you.  However, if any villager, like the Witch, kills you, or the townspeople vote to kill you, all villagers lose their powers.',
+    ANCIENT: 'You are a villager who will not die the first time the werewolves target you.  However, if any villager, like the Witch, kills you, or the townspeople vote to kill you, all villagers lose their powers.',
     ACTOR: 'You are a villager, but the moderator has chosen three other special roles for you, all unknown to you.  Each night, you will be woken up by the moderator and can elect to randomly receive one of those roles, to be used until the following night.  However, a role is used up once you receive it, so you can use your power a maximum of three times.',
-    STUTTERING_JUDGE: 'You are a villager. One time during the game, you may secretly signal to the moderator that a second discussion and vote should be held immediately after the current one.',
+    STUTTERING_JUDGE: 'You are a villager. One time during the game at daytime, you may secretly signal to the moderator that a second discussion and vote should be held immediately after the current one, skipping night time.',
     # ONE_OF_THE_TWO_SISTERS: 'You are a villager, but at the beginning of the game you will be shown the identity of your sister, who is also a villager, allowing you two to trust each other.',
-    RAVEN: 'You are a villager.  Each night, the moderator will wake you up and ask who you would like to curse with two votes for the following day. You may not curse yourself.',
+    RAVEN: 'You are a villager.  Each night, the moderator will wake you up and ask who you would like to curse with two votes for the following day. You may not curse yourself.  The cursed player does not know they are cursed, and the moderator will also not reveal who was cursed after voting.  The moderator WILL of course inform the village when the extra vote makes a difference.',
     SCAPEGOAT: 'You are a villager. In the event that voting ever results in a tie when you are alive, you die and voting for the round ends. However, your revenge, if you die this way, is that you choose someone to not be allowed to vote the following day.',
-    BIG_BAD_WEREWOLF: 'You are a werewolf, but an extremely powerful one.  As long as no werewolves have been eliminated, the moderator will wake you up a second time at night, alone, and you will choose another player to kill.',
-    CURSED_WOLF_FATHER: 'You are a werewolf with a special twist. One time during the game, you may secretly signal to the moderator that the target you and the other werewolves picked to kill will become a werewolf instead of dying.',
+    BIG_BAD_WEREWOLF: 'You are a werewolf, but an extremely powerful one.  As long as no werewolves have been eliminated, the moderator will wake you up a second time at night, alone, and you will choose another player to kill. You cannot tell your role to the other werewolves.',
+    CURSED_WOLF_FATHER: 'You are a werewolf with a special twist. One time during the game, you may secretly signal to the moderator that the target you and the other werewolves picked to kill will become a werewolf instead of dying.  You cannot tell your role to the other werewolves. Finally, note that the fortune teller will receive the updated role if they ask about who was converted the night of conversion.',
 }
 
 # This accessory groups are needed for setting up private channels with the moderator
@@ -74,6 +74,7 @@ assert len(ROLE_DESCRIPTIONS) == len(STANDARD_SPECIAL_VILLAGERS) + len(ADVANCED_
 
 VILLAGE_CHANNEL_ID = 'C012NRD42DR'
 WEREWOLVES_CHANNEL_ID = 'G012P9CA6RL'
+PURGATORY_CHANNEL_ID = 'G012JB44URM'
 BOT_MEMBER_ID = 'U012S2HU6H3'
 
 
@@ -115,6 +116,7 @@ def get_display_name(client, member_id):
 
     return f'@{display_name}'
 
+
 def find_member_id_by_display_name(client, member):
     members = client.conversations_members(channel=VILLAGE_CHANNEL_ID)
 
@@ -124,6 +126,7 @@ def find_member_id_by_display_name(client, member):
         if get_display_name(client, member_id) == member:
             return member_id
 
+
 def find_im_by_member_id(client, member_id):
     for im in client.conversations_list(types='im')['channels']:
         if im['user'] == member_id:
@@ -131,13 +134,15 @@ def find_im_by_member_id(client, member_id):
 
     raise Exception('No IM found for given member id')
 
-def archive_role_channels(client, exceptions=None):
+
+def archive_private_channels(client, exceptions=None):
     if not exceptions:
-        exceptions = [WEREWOLVES_CHANNEL_ID]
+        exceptions = [WEREWOLVES_CHANNEL_ID, PURGATORY_CHANNEL_ID]
     for channel in client.conversations_list(types='private_channel').data['channels']:
         if channel['id'] not in exceptions and not channel['is_archived']:
             # Note that this will stop working November 2020
             client.groups_archive(channel=channel['id'])
+
 
 def create_or_unarchive_private_channel(client, name, moderator_id):
     name = name.lower().replace(' ', '_')
@@ -155,6 +160,7 @@ def create_or_unarchive_private_channel(client, name, moderator_id):
     )
     return creation_response['channel']['id']
 
+
 def remove_players_from_channel(client, channel_id, moderator_id):
     # Add the moderator if they are not already in channel. This prevents
     # the channel from every having only bots in the event of a moderator
@@ -168,8 +174,6 @@ def remove_players_from_channel(client, channel_id, moderator_id):
     for member_id in members.data['members']:
         if member_id not in (moderator_id, BOT_MEMBER_ID):
             client.conversations_kick(channel=channel_id, user=member_id)
-
-
 
 
 def main():
@@ -290,8 +294,12 @@ def main():
     # Clear werewolf channel of all but the moderator and the bot
     remove_players_from_channel(client, WEREWOLVES_CHANNEL_ID, moderator_id)
 
+    # Clear purgatory channel of all but the moderator and bot.
+    # This channel gives dead players a safe place to comment on the game.
+    remove_players_from_channel(client, PURGATORY_CHANNEL_ID, moderator_id)
+
     # Archive role channels. Below we will unarchive only those needed.
-    archive_role_channels(client)
+    archive_private_channels(client)
 
     # Assign shuffled roles to active players, adding to the appropriate
     # private groups and sending them a DM with ther role.
@@ -334,7 +342,7 @@ def main():
     # High-level summary sent to village channel
     player_summary = '\n'.join([f'<@{mid}>' for mid in active_players])
     role_summary_header= f'We will begin with *{num_wolves}* werewolve(s) and *{num_villagers}* villagers, including the following special roles:\n'
-    special_roles_text = '\n'.join(f'\n~*{role}*~: {ROLE_DESCRIPTIONS[role]}' for role in (special_villagers + special_werewolves)) or 'None!'
+    special_roles_text = '\n'.join(f'\n_*{role}*_: {ROLE_DESCRIPTIONS[role]}' for role in (special_villagers + special_werewolves)) or 'None!'
     client.chat_postMessage(
         channel=VILLAGE_CHANNEL_ID,
         text=f"Starting a game, moderated by <@{moderator_id}>, with\n\n {player_summary}\n\n {role_summary_header}{special_roles_text}"
