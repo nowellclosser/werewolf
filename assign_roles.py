@@ -15,31 +15,67 @@ WITCH = 'Witch'
 HUNTER ='Hunter'
 FORTUNE_TELLER = 'Fortune Teller'
 
+ALPHA_WEREWOLF = 'Alpha Werewolf'
 BIG_BAD_WEREWOLF = 'Big Bad Wolf'
+BLOCKER_WOLF = 'Blocker Wolf'
 CURSED_WOLF_FATHER = 'Cursed Wolf-Father'
 
 ANCIENT = 'Ancient'
 ACTOR = 'Actor'
 STUTTERING_JUDGE = 'Stuttering Judge'
-# ONE_OF_THE_TWO_SISTERS = 'One of the Two Sisters'
 RAVEN = 'Raven'
 SCAPEGOAT = 'Scapegoat'
+JAILER = 'Jailer'
+GUARDIAN_ANGEL = 'Guardian Angel'
+BABYSITTER = 'Babysitter'
+BODYGUARD = 'Bodyguard'
+VIGILANTE = 'Vigilante'
+MILLER = 'Miller' # Penalty to revealing?
+PRIEST = 'Priest'
+INNOCENT_CHILD = 'Innocent Child'
+FRIENDLY_NEIGHBOR = 'Friendly Neighbor'
+PROSTITUTE = 'Prostitute'  # Some harm to werewolves as well to balance?
+NEAPOLITAN = 'Neapolitan'
+FRUIT_VENDOR = 'Fruit Vendor'
+
 # Wild child?
+# Ascetic is cool but would need both a werewolf and village ascetic if roles are known
+# Two sisters is cool
+# Mailman is cool but need one on both sides as well unless roles unkown
+# Traitor wolf is interesting but implementation details tricky
+# Judas - turns into wolf when dead. if killed at night?
+# Bookie - guess who will die the next day for a reward the following night. Kill or investigate?
 
 ROLE_DESCRIPTIONS = {
     WEREWOLF: 'You are a plain werewolf. You will be woken up by the moderator each night with all living werewolves and decide on someone to kill (possibly a werewolf). Your goal is to eliminate all villagers.',
+
     VILLAGER: 'You are a plain villager, whose only responsibility is to participate in the daily town meeting. Your goal is to eliminate all werewolves.',
     DOCTOR: 'You are a villager, but you will be woken up alone by the moderator each night and pick one person (possibly yourself) to protect. If that person is targeted by the werewolves that night, they will not die. Your goal is to eliminate all werewolves.',
     WITCH: 'You are a villager, but you will be woken up alone by the moderator each night and choose to save someone and/or kill someone. However, you can do each of those only once per game. Your kill cannot be prevented by the doctor.  Your goal is to eliminate all werewolves.',
     HUNTER: 'You are a villager, but whenever you die, whether night or day, you must choose a second person to die with you, with no discussion. Your goal is to eliminate all werewolves.',
     FORTUNE_TELLER: 'You are a villager, but you will be woken up alone by the moderator each night and choose someone to inspect.  The moderator will indicate whether that person is a werewolf. Your goal is to eliminate all werewolves.',
+
     ANCIENT: 'You are a villager who will not die the first time the werewolves target you.  However, if any villager, like the Witch, kills you, or the townspeople vote to kill you, all villagers lose their powers.',
     ACTOR: 'You are a villager, but the moderator has chosen three other special roles for you, all unknown to you.  Each night, you will be woken up by the moderator and can elect to randomly receive one of those roles, to be used until the following night.  However, a role is used up once you receive it, so you can use your power a maximum of three times.',
     STUTTERING_JUDGE: 'You are a villager. One time during the game at daytime, you may secretly signal to the moderator that a second discussion and vote should be held immediately after the current one, skipping night time.',
-    # ONE_OF_THE_TWO_SISTERS: 'You are a villager, but at the beginning of the game you will be shown the identity of your sister, who is also a villager, allowing you two to trust each other.',
     RAVEN: 'You are a villager.  Each night, the moderator will wake you up and ask who you would like to curse with two votes for the following day. You may not curse yourself.  The cursed player does not know they are cursed, and the moderator will also not reveal who was cursed after voting. The moderator WILL of course inform the village when the extra vote makes a difference.',
     SCAPEGOAT: 'You are a villager. In the event that voting ever results in a tie when you are alive, you die and voting for the round ends. However, your revenge, if you die this way, is that you choose someone to not be allowed to vote the following day.',
+    JAILER: 'You are a villager, but you will be woken up alone by the moderator each night and pick one person other than yourself to protect. If that person is targeted by the werewolves that night, they will not die. However, if they are a special villager they lose their powers this night.  The moderator must therefore wake you up before any other special villagers.',
+    GUARDIAN_ANGEL: 'You are a villager, but you will be woken up alone by the moderator each night and pick one person other than yourself to protect. If that person is targeted by the werewolves that night, they will not die.',
+    BABYSITTER: 'You are a villager, but you will be woken up alone by the moderator each night and may pick one person other than yourself to protect. If you choose to protect someone and that person is targeted by the werewolves that night, they will not die. However, if you die that night then your target dies too.',
+    BODYGUARD: 'You are a villager, but you will be woken up alone by the moderator each night and may pick one person other than yourself to protect. If you choose to protect someone and that person is targeted by the werewolves that night, you will die instead of them.',
+    VIGILANTE: 'You are a villager. You will be woken up alone by the moderator each night to decide whether to kill another player, but you have only two bullets to kill with each game. And if you kill a villager, you yourself will also die from guilt that night.',
+    MILLER: 'You are a villager, but you will appear guilty if inspected by a fortune-teller-like role. You have no active special powers.',
+    PRIEST: 'You are a villager.  Every time someone dies, you learn whether they were a werewolf or villager.',
+    INNOCENT_CHILD: 'You are a villager. At any point during the game you may instruct the moderator to confirm to the group that you are a villager',
+    FRIENDLY_NEIGHBOR: 'You are a villager.  Once during the game you may instruct the moderator to tell a second player of your choosing that you are a villager. Please go through the moderator instead of directly messaging the person you choose.',
+    PROSTITUTE: 'You are a villager, but every night you are woken up by the moderator and must choose someone to visit. If they have a special role, they lose it for that night. You must be woken up before other special villagers.',
+    NEAPOLITAN: 'You are a villager, but you will be woken up alone by the moderator each night and choose someone to inspect.  The moderator will indicate whether that person is a plain villager or not--so you will get the same signal for werewolves and special villagers.',
+    FRUIT_VENDOR: 'You are a villager.  Each night, you may instruct the moderator to send someone fruit on your behalf, which does nothing.',
+
+    ALPHA_WEREWOLF: 'You are a werewolf, but you will appear to be a villager if inspected by a fortune-teller-like role.',
     BIG_BAD_WEREWOLF: 'You are a werewolf, but an extremely powerful one.  As long as no werewolves have been eliminated, the moderator will wake you up a second time at night, alone, and you will choose another player to kill. You cannot tell your role to the other werewolves.',
+    BLOCKER_WOLF: 'You are a werewolf with an extra ability.  You will be woken up again separately to choose a player to block that night.  If that player is a special villager with night abilities, they will not be able to perform their ability that night.',
     CURSED_WOLF_FATHER: 'You are a werewolf with a special twist. One time during the game, you may secretly signal to the moderator that the target you and the other werewolves picked to kill will become a werewolf instead of dying.  You cannot tell your role to the other werewolves. Finally, note that the fortune teller will receive the updated role if they ask about who was converted the night of conversion.',
 }
 
@@ -51,7 +87,9 @@ STANDARD_SPECIAL_VILLAGERS = [
 ]
 
 SPECIAL_WEREWOLVES = [
+    ALPHA_WEREWOLF,
     BIG_BAD_WEREWOLF,
+    BLOCKER_WOLF,
     CURSED_WOLF_FATHER
 ]
 
@@ -59,9 +97,20 @@ ADVANCED_SPECIAL_VILLAGERS = [
     ANCIENT,
     ACTOR,
     STUTTERING_JUDGE,
-    # ONE_OF_THE_TWO_SISTERS,
     RAVEN,
     SCAPEGOAT,
+    JAILER,
+    GUARDIAN_ANGEL,
+    BABYSITTER,
+    BODYGUARD,
+    VIGILANTE,
+    MILLER,
+    PRIEST,
+    INNOCENT_CHILD,
+    FRIENDLY_NEIGHBOR,
+    PROSTITUTE,
+    NEAPOLITAN,
+    FRUIT_VENDOR,
 ]
 
 # This accessory groups are needed for setting up private channels with the moderator
@@ -127,6 +176,7 @@ def find_member_id_by_display_name(client, member):
             return member_id
 
 
+# To make this work, need to figure out permissions for new people
 def find_im_by_member_id(client, member_id):
     for im in client.conversations_list(types='im')['channels']:
         if im['user'] == member_id:
@@ -311,8 +361,10 @@ def main():
         role_text = f'Your role is *{assigned_role}*. {ROLE_DESCRIPTIONS[assigned_role]}'
         player_message = '\n'.join([role_text, 'Good luck!'])
 
+        # Note that finding the IM private channel ID does not seem to work with new players. App possibly needs to
+        # be reauthorized.  In the meantime, we will use the member ID directly, though that may be deprecated in the future.
         client.chat_postMessage(
-            channel=find_im_by_member_id(client, member_id),
+            channel=member_id,
             text=player_message
         )
 
@@ -335,7 +387,7 @@ def main():
     # Send role summary to moderator
     all_roles = '\n'.join([f'<@{mid}>: *{assigned_roles[mid]}*' for mid in active_players])
     client.chat_postMessage(
-        channel=find_im_by_member_id(client, moderator_id),
+        channel=moderator_id,
         text=f'All roles:\n {all_roles}'
     )
 
