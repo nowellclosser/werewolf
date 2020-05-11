@@ -121,6 +121,7 @@ ALL_WEREWOLVES = [WEREWOLF, *SPECIAL_WEREWOLVES]
 
 assert len(ROLE_DESCRIPTIONS) == len(STANDARD_SPECIAL_VILLAGERS) + len(ADVANCED_SPECIAL_VILLAGERS) + len(SPECIAL_WEREWOLVES) + 2
 
+# These are technically not stable, apparently, with a small probability of changing.
 VILLAGE_CHANNEL_ID = 'C012NRD42DR'
 WEREWOLVES_CHANNEL_ID = 'G012P9CA6RL'
 PURGATORY_CHANNEL_ID = 'G012JB44URM'
@@ -176,7 +177,8 @@ def find_member_id_by_display_name(client, member):
             return member_id
 
 
-# To make this work, need to figure out permissions for new people
+# This actually would just need to be a call to conversations.open(), but we
+# don't need the im ID for a direct message anyway- just use member ID.
 def find_im_by_member_id(client, member_id):
     for im in client.conversations_list(types='im')['channels']:
         if im['user'] == member_id:
@@ -361,8 +363,6 @@ def main():
         role_text = f'Your role is *{assigned_role}*. {ROLE_DESCRIPTIONS[assigned_role]}'
         player_message = '\n'.join([role_text, 'Good luck!'])
 
-        # Note that finding the IM private channel ID does not seem to work with new players. App possibly needs to
-        # be reauthorized.  In the meantime, we will use the member ID directly, though that may be deprecated in the future.
         client.chat_postMessage(
             channel=member_id,
             text=player_message
