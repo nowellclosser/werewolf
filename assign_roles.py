@@ -113,11 +113,11 @@ ADVANCED_SPECIAL_VILLAGERS = [
     FRUIT_VENDOR,
 ]
 
-# This accessory groups are needed for setting up private channels with the moderator
+# These accessory groups are needed for setting up private channels with the moderator
 ALL_SPECIAL_VILLAGERS = STANDARD_SPECIAL_VILLAGERS + ADVANCED_SPECIAL_VILLAGERS
 ALL_WEREWOLVES = [WEREWOLF, *SPECIAL_WEREWOLVES]
 
-# Notes for moderator about who has to wake up and things to keep track of?
+#TODO: Notes for moderator about who has to wake up and things to keep track of
 
 assert len(ROLE_DESCRIPTIONS) == len(STANDARD_SPECIAL_VILLAGERS) + len(ADVANCED_SPECIAL_VILLAGERS) + len(SPECIAL_WEREWOLVES) + 2
 
