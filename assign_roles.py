@@ -193,6 +193,7 @@ def archive_private_channels(client, exceptions=None):
     for channel in client.conversations_list(types='private_channel').data['channels']:
         if channel['id'] not in exceptions and not channel['is_archived']:
             # Note that this will stop working November 2020
+            # Update: apparently Feb 24,2021 it stopped working
             client.groups_archive(channel=channel['id'])
 
 
