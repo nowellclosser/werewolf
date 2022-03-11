@@ -93,28 +93,44 @@ SHORT_DESCRIPTIONS = {
     FORTUNE_TELLER: 'Can inspect one person each night to determine whether they are a werewolf.',
 
     ANCIENT: 'If any villager kills them or the townspeople vote to kill them, all villagers lose their powers.',
-    ACTOR: 'Moderator has chosen three special roles for them, all unknown to them. They can choose to receive a random role at night, up to once for each',
+    ACTOR: 'Moderator has chosen three special roles for them, all unknown to them. They can choose to receive a random role up to three nights.',
     STUTTERING_JUDGE: 'One time during the game at daytime, may signal to the moderator that the following night should be skipped.',
     RAVEN: 'Each night, secretly curses someone else with two votes the following day.',
-    SCAPEGOAT: 'If voting ever results in a tie when you are alive, you die and the round ends, and you choose someone to not be allowed to vote the following day.',
-    JAILER: 'You are a villager, but you will be woken up alone by the moderator each night and pick one person other than yourself to protect. If that person is targeted by the werewolves that night, they will not die. However, if they are a special villager they lose their powers this night.  The moderator must therefore wake you up before any other special villagers.',
-    GUARDIAN_ANGEL: 'You are a villager, but you will be woken up alone by the moderator each night and pick one person other than yourself to protect. If that person is targeted by the werewolves that night, they will not die.',
-    BABYSITTER: 'You are a villager, but you will be woken up alone by the moderator each night and may pick one person other than yourself to protect. If you choose to protect someone and that person is targeted by the werewolves that night, they will not die. However, if you die that night then your target dies too.',
-    BODYGUARD: 'You are a villager, but you will be woken up alone by the moderator each night and may pick one person other than yourself to protect. If you choose to protect someone and that person is targeted by the werewolves that night, you will die instead of them.',
-    VIGILANTE: 'You are a villager. You will be woken up alone by the moderator each night to decide whether to kill another player, but you have only two bullets to kill with each game. And if you kill a villager, you yourself will also die from guilt that night.',
-    MILLER: 'You are a villager, but you will appear guilty if inspected by a fortune-teller-like role. You have no active special powers.',
-    PRIEST: 'You are a villager.  Every time someone dies, you learn whether they were a werewolf or villager.',
-    INNOCENT_CHILD: 'You are a villager. At any point during the game you may instruct the moderator to confirm to the group that you are a villager',
-    FRIENDLY_NEIGHBOR: 'You are a villager.  Once during the game you may instruct the moderator to tell a second player of your choosing that you are a villager. Please go through the moderator instead of directly messaging the person you choose.',
-    PROSTITUTE: 'You are a villager, but every night you are woken up by the moderator and must choose someone to visit. If they have a special role, they lose it for that night. You must be woken up before other special villagers.',
-    NEAPOLITAN: 'You are a villager, but you will be woken up alone by the moderator each night and choose someone to inspect.  The moderator will indicate whether that person is a plain villager or not--so you will get the same signal for werewolves and special villagers.',
-    FRUIT_VENDOR: 'You are a villager.  Each night, you may instruct the moderator to send someone fruit on your behalf, which does nothing.',
+    SCAPEGOAT: 'If voting ever results in a tie when they are alive, they die and the round ends, and they choose someone to not be allowed to vote the following day.',
+    JAILER: 'Picks one person other than themself to protect each night, but that person also loses their powers for the night.',
+    GUARDIAN_ANGEL: 'Picks one person other than themself to protect from the werewolves each night.',
+    BABYSITTER: 'Picks one person other than themself to protect from the werewolves each night. But if the babysitter is killed, so is the person they protected.',
+    BODYGUARD: 'Picks one person other than themself to protect from the werewolves each night. If the werewolves pick that person, the bodyguard dies instead.',
+    VIGILANTE: 'Decides each night whether to kill another player, but has only two kills the whole game. If they kill a villager, they also die from guilt.',
+    MILLER: 'Will appear guilty if inspected by a fortune-teller-like role. No active special powers.',
+    PRIEST: 'Every time someone dies, learns whether they were a werewolf or villager.',
+    INNOCENT_CHILD: 'At any point during the game you may instruct the moderator to confirm to the group that you are a villager',
+    FRIENDLY_NEIGHBOR: 'Once during the game, may instruct the moderator to confirm to a second player of their choosing that they are a villager.',
+    PROSTITUTE: 'Must choose someone to visit every night. If they have a special role, they lose it for the night.',
+    NEAPOLITAN: 'Will inspect someone each night.  The moderator will merely indicate whether that person is a PLAIN villager or not.',
+    FRUIT_VENDOR: 'Each night, you may instruct the moderator to send someone fruit on your behalf, which does nothing.',
 
     ALPHA_WEREWOLF: 'Appears to be a villager if inspected by a fortune-teller-like role.',
     BIG_BAD_WEREWOLF: 'As long as no werewolves have been eliminated, performs a second kill each night.',
     BLOCKER_WOLF: 'Choose a player to block each night, making them temporarily lose special abilities if they have any.',
     CURSED_WOLF_FATHER: 'One time during the game, may convert a werewolf "kill" into another werewolf instead.',
 }
+
+VILLAGER_WAKE_UP_PRIORITY = [
+    PROSTITUTE,
+    JAILER,
+    FRUIT_VENDOR,
+    ACTOR,
+    DOCTOR,
+    WITCH,
+    FORTUNE_TELLER,
+    RAVEN,
+    GUARDIAN_ANGEL,
+    BABYSITTER,
+    BODYGUARD,
+    VIGILANTE,
+    NEAPOLITAN,
+]
 
 STANDARD_SPECIAL_VILLAGERS = [
     DOCTOR,
@@ -226,21 +242,14 @@ WEREWOLF_TABLE_NAME = "WerewolfGame"
 
 WEREWOLF_CHANNEL_PREFIX = 'werewolf_'
 
-#TODO: Won't be able to hardcode these eventually. For channels can go by name and werewolf_X
-VILLAGE_CHANNEL_ID = 'C012NRD42DR'
-WEREWOLVES_CHANNEL_ID = 'G012P9CA6RL'
-PURGATORY_CHANNEL_ID = 'G012JB44URM'
-BOT_MEMBER_ID = 'U012S2HU6H3'
-
 
 def lambda_handler(event, context):
     if event["isBase64Encoded"]:
         event = json.loads(urllib.parse.unquote(base64.b64decode(event['body']).decode("utf-8")).strip('payload='))
-        print(event)
-
     else:
         event = json.loads(event["body"])
         event = event['event']
+    print(event)
     if event['type'] == 'block_actions':
         return parse_button_push(event)
     if event['type'] == 'view_submission':
@@ -259,6 +268,7 @@ def parse_button_push(event):
         'statusCode': 200,
         'body': ''
     }
+
 
 def parse_view_submission(event):
     # TODO: Validate players are not bots
@@ -339,7 +349,8 @@ def parse_view_submission(event):
             }
         )
 
-        assign_roles_and_configure_slack(event['team']['id'])
+        # TODO: Put this on an SQS queue with the team ID and process in separate lambda
+        assign_roles_and_configure_slack(event['team']['id'], event['view']['bot_id'])
 
         return {
             "response_action": "clear"
@@ -347,7 +358,7 @@ def parse_view_submission(event):
 
 def archive_private_channels(exceptions=None):
     if not exceptions:
-        exceptions = [WEREWOLVES_CHANNEL_ID, PURGATORY_CHANNEL_ID]
+        exceptions = [find_werewolves_channel_id(), find_purgatory_channel_id()]
     for channel in slack_client.conversations_list(types='private_channel').data['channels']:
         if channel['id'] not in exceptions and not channel['is_archived'] and channel['name'].startswith(WEREWOLF_CHANNEL_PREFIX):
             slack_client.conversations_archive(channel=channel['id'])
@@ -356,14 +367,14 @@ def create_channel_name(text):
     return f"{WEREWOLF_CHANNEL_PREFIX}{text.lower().replace(' ', '_')}"
 
 
-def create_or_unarchive_private_channel(name, moderator_id):
+def create_or_unarchive_private_channel(name, moderator_id, bot_id):
     name = create_channel_name(name)
     # If channel is archived, unarchive it
     for channel in slack_client.conversations_list(types='private_channel').data['channels']:
         if channel['name'] == name:
             if channel['is_archived']:
                 slack_client.conversations_unarchive(channel=channel['id'], as_user=True)
-                remove_players_from_channel(channel['id'], moderator_id)
+                remove_players_from_channel(channel['id'], moderator_id, bot_id)
             return channel['id']
 
     creation_response = slack_client.conversations_create(
@@ -373,9 +384,9 @@ def create_or_unarchive_private_channel(name, moderator_id):
     return creation_response['channel']['id']
 
 
-def remove_players_from_channel(channel_id, moderator_id):
+def remove_players_from_channel(channel_id, moderator_id, bot_id):
     # Add the moderator if they are not already in channel. This prevents
-    # the channel from every having only bots in the event of a moderator
+    # the channel from ever having only bots in the event of a moderator
     # change.
     try:
         slack_client.conversations_invite(channel=channel_id, users=moderator_id)
@@ -384,29 +395,124 @@ def remove_players_from_channel(channel_id, moderator_id):
     members = slack_client.conversations_members(channel=channel_id)
 
     for member_id in members.data['members']:
-        #TODO: don't hardcode bot_member_id
-        if member_id not in (moderator_id, BOT_MEMBER_ID):
+        if member_id not in (moderator_id, find_wolfbot_member_id(bot_id)):
             slack_client.conversations_kick(channel=channel_id, user=member_id)
 
-def assign_roles_and_configure_slack(team_id):
+
+def configure_village_channel(player_ids, moderator_id, bot_id):
+    name = create_channel_name("village")
+    
+    # If channel exists, use it
+    for channel in slack_client.conversations_list(types='public_channel').data['channels']:
+        if channel['name'] == name:
+            if channel['is_archived']:
+                slack_client.conversations_unarchive(channel=channel['id'], as_user=True)
+            break
+    else:
+        # Otherwise create it
+        slack_client.conversations_create(
+            name=name,
+        )
+    
+    # Make sure all active players, moderator, and bot are in channel.  For now we'll leave others alone.
+    for player_id in player_ids + [moderator_id, bot_id] :
+        try:
+            slack_client.conversations_invite(channel=find_village_channel_id(), users=player_id)
+        except:
+            pass
+
+
+def find_village_channel_id():
+    for channel in slack_client.conversations_list(types='public_channel').data['channels']:
+        if channel['name'] == create_channel_name("village"):
+            return channel['id']
+    
+    raise Exception("Village channel not found")
+
+
+def configure_werewolves_channel(moderator_id, bot_id):
+    name = create_channel_name("werewolves")
+    
+    # If channel exists, use it
+    for channel in slack_client.conversations_list(types='private_channel').data['channels']:
+        if channel['name'] == name:
+            if channel['is_archived']:
+                slack_client.conversations_unarchive(channel=channel['id'], as_user=True)
+            break
+    else:
+        # Otherwise create it
+        slack_client.conversations_create(
+            name=name,
+            is_private=True
+        )
+    
+    # Make sure moderator and bot are in channel
+    try:
+        slack_client.conversations_invite(channel=find_werewolves_channel_id(), users=','.join([moderator_id, bot_id]))
+    except:
+        pass
+
+
+def find_werewolves_channel_id():
+    for channel in slack_client.conversations_list(types='private_channel').data['channels']:
+        if channel['name'] == create_channel_name("werewolves"):
+            return channel['id']
+
+
+def configure_purgatory_channel(moderator_id, bot_id):
+    name = create_channel_name("purgatory")
+    
+    # If channel exists, use it
+    for channel in slack_client.conversations_list(types='private_channel').data['channels']:
+        if channel['name'] == name:
+            if channel['is_archived']:
+                slack_client.conversations_unarchive(channel=channel['id'], as_user=True)
+            break
+    else:
+        # Otherwise create it
+        slack_client.conversations_create(
+            name=name,
+            is_private=True
+        )
+    
+    # Make sure moderator and bot are in channel
+    try:
+        slack_client.conversations_invite(channel=find_purgatory_channel_id(), users=','.join([moderator_id, bot_id]))
+    except:
+        pass
+
+
+def find_purgatory_channel_id():
+    for channel in slack_client.conversations_list(types='private_channel').data['channels']:
+        if channel['name'] == create_channel_name("purgatory"):
+            return channel['id']
+
+
+def find_wolfbot_member_id(bot_id):
+    return slack_client.bots_info(bot_id).get('user_id')   
+
+    
+def assign_roles_and_configure_slack(team_id, bot_id):
     current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': team_id})['Item']
 
     moderator_id = current_game_config['moderator_id']
 
     # Clear werewolf channel of all but the moderator and the bot
-    remove_players_from_channel(WEREWOLVES_CHANNEL_ID, moderator_id)
+    remove_players_from_channel(find_werewolves_channel_id(), moderator_id, bot_id)
 
-    # Clear purgatory channel of all but the moderator and bot.
-    # This channel gives dead players a safe place to comment on the game.
-    remove_players_from_channel(PURGATORY_CHANNEL_ID, moderator_id)
 
     # Archive role channels. Below we will unarchive only those needed.
     archive_private_channels()
 
-    # Configure village and purgatory channels
+    # Configure village, purgatory, and werewolves channels. Village should have everyone and 
+    # purgatory should have no one but the moderator and WolfBot.
 
-    
-    
+    configure_village_channel(current_game_config['player_ids'], moderator_id, bot_id)
+
+    configure_purgatory_channel(moderator_id, bot_id)
+
+    configure_werewolves_channel(moderator_id, bot_id)
+
     # randomly assign roles
     game_roles = current_game_config['game_roles']
     random.shuffle(game_roles)
@@ -426,13 +532,14 @@ def assign_roles_and_configure_slack(team_id):
         )
 
         if assigned_role in ALL_WEREWOLVES:
-            slack_client.conversations_invite(channel=WEREWOLVES_CHANNEL_ID, users=player_id)
+            slack_client.conversations_invite(channel=find_werewolves_channel_id(), users=player_id)
 
         # Set up a dedicated line to the moderator for any special role.
         if assigned_role in ALL_SPECIAL_VILLAGERS + SPECIAL_WEREWOLVES:
             role_channel_id = create_or_unarchive_private_channel(
                 assigned_role,
-                moderator_id
+                moderator_id,
+                bot_id
             )
             slack_client.conversations_invite(
                 channel=role_channel_id,
@@ -461,7 +568,7 @@ def assign_roles_and_configure_slack(team_id):
     role_summary_header= f'We will begin with *{num_wolves}* werewolve(s) and *{num_villagers}* villagers, including the following special roles:\n'
     special_roles_text = '\n'.join(f'\n_*{role}*_: {ROLE_DESCRIPTIONS[role]}' for role in (special_characters)) or 'None!'
     slack_client.chat_postMessage(
-        channel=VILLAGE_CHANNEL_ID,
+        channel=find_village_channel_id(),
         text=f"Starting a game, moderated by <@{moderator_id}>, with\n\n {player_summary}\n\n {role_summary_header}{special_roles_text}"
     )
 
@@ -472,7 +579,6 @@ def assign_roles_and_configure_slack(team_id):
             ':i': assigned_roles
         }
     )
-    print("Made it to end of role assignment")
 
 
 def get_max_num_wolves(num_players):
@@ -587,7 +693,7 @@ def create_configure_villagers_modal(num_wolves, num_players):
                                 "text": f"{SHORT_DESCRIPTIONS[role]}"
                             },
                             "value": role
-                        } for role in STANDARD_SPECIAL_VILLAGERS
+                        } for role in ALL_SPECIAL_VILLAGERS
                     ],
                     "action_id": "special_villager-action",
                 }
@@ -596,7 +702,7 @@ def create_configure_villagers_modal(num_wolves, num_players):
     }
 
 
-# TODO: Use errors functionality
+# POSSIBLE: Use errors functionality?
 def create_validation_error_modal(error_message):
     return {
         "type": "modal",
