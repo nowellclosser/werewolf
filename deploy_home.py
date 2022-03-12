@@ -1,12 +1,9 @@
 import os
 
-from slack import WebClient
-
-API_TOKEN = os.environ['SLACK_API_TOKEN']
+import slack_sdk
 
 def main():
-    client = WebClient(token=API_TOKEN)
-    client.views_publish(
+    slack_client = slack_sdk.WebClient(token=os.environ["SLACK_API_TOKEN"]).views_publish(
         user_id='U012M822WGM',
         view={
             "type": "home",
@@ -46,7 +43,16 @@ def main():
                             "type": "button",
                             "text": {
                                 "type": "plain_text",
-                                "text": "See roles",
+                                "text": "See alive players",
+                                "emoji": True
+                            },
+                            "value": "see_alive_players"
+                        },
+                        {
+                            "type": "button",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "See possible roles",
                                 "emoji": True
                             },
                             "value": "see_roles"
@@ -55,7 +61,7 @@ def main():
                             "type": "button",
                             "text": {
                                 "type": "plain_text",
-                                "text": "Get help",
+                                "text": "See game rules",
                                 "emoji": True
                             },
                             "value": "help"
@@ -100,7 +106,7 @@ def main():
                             "type": "button",
                             "text": {
                                 "type": "plain_text",
-                                "text": "See current status",
+                                "text": "See current game status",
                                 "emoji": True
                             },
                             "value": "see_status"
@@ -114,6 +120,16 @@ def main():
                             },
                             "style": "danger",
                             "value": "kill_player"
+                        },
+                        {
+                            "type": "button",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "Undo previous kill",
+                                "emoji": True
+                            },
+                            "style": "danger",
+                            "value": "undo_kill_player"
                         },
                         {
                             "type": "button",

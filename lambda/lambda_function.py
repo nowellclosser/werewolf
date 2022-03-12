@@ -249,6 +249,84 @@ PICK_PLAYERS_MODAL = {
     ]
 }
 
+KILL_PLAYER_TITLE = "Kill a townsperson"
+KILL_PLAYER_MODAL = {
+    "title": {
+        "type": "plain_text",
+        "text": KILL_PLAYER_TITLE,
+        "emoji": True
+    },
+    "submit": {
+        "type": "plain_text",
+        "text": "Submit",
+        "emoji": True
+    },
+    "type": "modal",
+    "close": {
+        "type": "plain_text",
+        "text": "Cancel",
+        "emoji": True
+    },
+    "blocks": [
+        {
+            "block_id": "victim_select_block",
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "Who will die?"
+            },
+            "accessory": {
+                "type": "users_select",
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "Select a townsperson",
+                    "emoji": True
+                },
+                "action_id": "select_victim-action",
+            },
+        },
+    ]
+}
+
+UNDO_KILL_PLAYER_TITLE = "Undo a previous kill"
+UNDO_KILL_PLAYER_MODAL = {
+    "title": {
+        "type": "plain_text",
+        "text": UNDO_KILL_PLAYER_TITLE,
+        "emoji": True
+    },
+    "submit": {
+        "type": "plain_text",
+        "text": "Submit",
+        "emoji": True
+    },
+    "type": "modal",
+    "close": {
+        "type": "plain_text",
+        "text": "Cancel",
+        "emoji": True
+    },
+    "blocks": [
+        {
+            "block_id": "victim_select_block",
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "Who will die?"
+            },
+            "accessory": {
+                "type": "users_select",
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "Select a townsperson",
+                    "emoji": True
+                },
+                "action_id": "select_victim-action",
+            },
+        },
+    ]
+}
+
 CONFIGURE_WEREWOLVES_TITLE = "Werewolf Configuration"
 CONFIGURE_VILLAGERS_TITLE = "Villager Configuration"
 
@@ -277,11 +355,61 @@ def parse_button_push(event):
             trigger_id=trigger_id,
             view=json.dumps(PICK_PLAYERS_MODAL)
         )
+    if event['actions'][0].get('value') == 'kill_player':
+        slack_client.views_open(
+            trigger_id=trigger_id,
+            view=json.dumps(KILL_PLAYER_MODAL)
+        )
+    if event['actions'][0].get('value') == 'undo_kill_player':
+        slack_client.views_open(
+            trigger_id=trigger_id,
+            view=json.dumps(UNDO_KILL_PLAYER_MODAL)
+        )
+    if event['actions'][0].get('value') == 'see_status':
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
+        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+            response_text = "There is no game currently in play"  
+        else:
+            # TODO: improve format
+            response_text = json.dumps(
+                {get_member_name(player_id): player_status for player_id, player_status in current_game_config["game_state"].items()},
+                indent=4
+            )
+
+        slack_client.views_open(
+            trigger_id=trigger_id,
+            view=json.dumps(create_informational_modal("Current Game Status", response_text))
+        )
+    if event['actions'][0].get('value') == 'see_alive_players':
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
+        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+            response_text = "There is no game currently in play"  
+        else:
+            # TODO: improve format
+            alive_players = [
+                get_member_name(player_id) 
+                for player_id in current_game_config["game_state"] 
+                if current_game_config["game_state"][player_id]["alive"]
+            ]
+            response_text = f"{alive_players}"
+
+        slack_client.views_open(
+            trigger_id=trigger_id,
+            view=json.dumps(create_informational_modal("Currently Alive Players", response_text))
+        )
     
     return {
         'statusCode': 200,
         'body': ''
     }
+
+def get_member_name(member_id):
+    member_info = slack_client.users_info(user=member_id).data['user']
+
+    return member_info['profile'].get('display_name') or member_info['name']
+
+def is_bot(player_id):
+    return slack_client.users_info(user=player_id).data['user']['is_bot']
 
 
 def parse_view_submission(event):
@@ -289,10 +417,10 @@ def parse_view_submission(event):
     if event['view']['title']['text'] == urllib.parse.quote_plus(PICK_PLAYERS_TITLE):
         moderator_id = event['view']['state']['values']['moderator_select_block']['select_moderator-action']['selected_user']
         player_ids = event['view']['state']['values']['player_select_block']['select_players-action']['selected_users']
-        if not moderator_id or moderator_id in player_ids or len(player_ids) < 4:
+        if not moderator_id or moderator_id in player_ids or len(player_ids) < 4 or any([is_bot(player_id) for player_id in player_ids]):
             return {
                 "response_action": "push",
-                "view": create_validation_error_modal("You must select a moderator, not include them in the players list, and choose at least 4 players.")
+                "view": create_validation_error_modal("You must select a moderator, not include them in the players list, and choose at least 4 non-bot players.")
             }
 
         dynamodb.Table(WEREWOLF_TABLE_NAME).put_item(
@@ -301,7 +429,7 @@ def parse_view_submission(event):
                 'moderator_id': moderator_id,
                 'player_ids': player_ids,
                 'game_roles': [],
-                'assigned_roles': {}
+                'game_state': {}
             }
         )
         return {
@@ -365,6 +493,54 @@ def parse_view_submission(event):
 
         # TODO: Put this on an SQS queue with the team ID and process in separate lambda
         assign_roles_and_configure_slack(event['team']['id'], event['view']['bot_id'])
+
+        return {
+            "response_action": "clear"
+        }
+
+    if event['view']['title']['text'] == urllib.parse.quote_plus(KILL_PLAYER_TITLE):
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']})['Item']
+        victim_id = event['view']['state']['values']['victim_select_block']['select_victim-action']['selected_user']
+
+        game_state = current_game_config['game_state']
+        if victim_id not in game_state or not game_state[victim_id]['alive']:
+            return {
+                "response_action": "push",
+                "view": create_validation_error_modal("You must select an alive player in the current game.")
+            }
+        game_state[victim_id]['alive'] = False
+
+        dynamodb.Table(WEREWOLF_TABLE_NAME).update_item(
+            Key={'ID': event['team']['id']},
+            UpdateExpression='SET game_state = :i',
+            ExpressionAttributeValues={
+                ':i': game_state
+            }
+        )
+
+        return {
+            "response_action": "clear"
+        }
+
+    if event['view']['title']['text'] == urllib.parse.quote_plus(UNDO_KILL_PLAYER_TITLE):
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']})['Item']
+        victim_id = event['view']['state']['values']['victim_select_block']['select_victim-action']['selected_user']
+
+        game_state = current_game_config['game_state']
+        if victim_id not in game_state or game_state[victim_id]['alive']:
+            return {
+                "response_action": "push",
+                "view": create_validation_error_modal("You must select a dead player in the current game.")
+            }
+        game_state[victim_id]['alive'] = True
+
+        dynamodb.Table(WEREWOLF_TABLE_NAME).update_item(
+            Key={'ID': event['team']['id']},
+            UpdateExpression='SET game_state = :i',
+            ExpressionAttributeValues={
+                ':i': game_state
+            }
+        )
 
         return {
             "response_action": "clear"
@@ -523,7 +699,6 @@ def assign_roles_and_configure_slack(team_id, bot_id):
     # Clear werewolf channel of all but the moderator and the bot
     remove_players_from_channel(find_werewolves_channel_id(), moderator_id, bot_id)
 
-
     # Archive role channels. Below we will unarchive only those needed.
     archive_private_channels()
 
@@ -531,11 +706,13 @@ def assign_roles_and_configure_slack(team_id, bot_id):
     game_roles = current_game_config['game_roles']
     random.shuffle(game_roles)
 
-    
-    assigned_roles = {}
+    game_state = {}
     for idx, player_id in enumerate(current_game_config['player_ids']):
         assigned_role = game_roles[idx]
-        assigned_roles[player_id] = assigned_role
+        game_state[player_id] = {
+            "role": assigned_role,
+            "alive": True
+        }
 
         role_text = f'Your role is *{assigned_role}*. {ROLE_DESCRIPTIONS[assigned_role]}'
         player_message = '\n'.join([role_text, 'Good luck!'])
@@ -563,7 +740,7 @@ def assign_roles_and_configure_slack(team_id, bot_id):
     active_players = current_game_config['player_ids']
 
     # Send role summary to moderator
-    all_roles = '\n'.join([f'<@{member_id}>: *{assigned_roles[member_id]}*' for member_id in active_players])
+    all_roles = '\n'.join([f'<@{member_id}>: *{game_state[member_id]["role"]}*' for member_id in active_players])
     slack_client.chat_postMessage(
         channel=moderator_id,
         text=f'All roles:\n {all_roles}'
@@ -572,11 +749,11 @@ def assign_roles_and_configure_slack(team_id, bot_id):
     # High-level summary sent to village channel
     num_wolves = 0
     special_characters = set()
-    for player_id, role in assigned_roles.items():
-        if role in ALL_WEREWOLVES:
+    for player_id, status_dict in game_state.items():
+        if status_dict['role'] in ALL_WEREWOLVES:
             num_wolves += 1
-        if role in SPECIAL_WEREWOLVES + ALL_SPECIAL_VILLAGERS:
-            special_characters.add(role)
+        if status_dict['role'] in SPECIAL_WEREWOLVES + ALL_SPECIAL_VILLAGERS:
+            special_characters.add(status_dict['role'])
     num_villagers = len(active_players) - num_wolves
     player_summary = '\n'.join([f'<@{mid}>' for mid in active_players])
     role_summary_header= f'We will begin with *{num_wolves}* werewolve(s) and *{num_villagers}* villagers, including the following special roles:\n'
@@ -588,9 +765,9 @@ def assign_roles_and_configure_slack(team_id, bot_id):
 
     dynamodb.Table(WEREWOLF_TABLE_NAME).update_item(
         Key={'ID': team_id},
-        UpdateExpression='SET assigned_roles = :i',
+        UpdateExpression='SET game_state = :i',
         ExpressionAttributeValues={
-            ':i': assigned_roles
+            ':i': game_state
         }
     )
 
@@ -735,7 +912,32 @@ def create_validation_error_modal(error_message):
                 "type": "section",
                 "text": {
                     "type": "plain_text",
-                    "text": f"{error_message}",
+                    "text": error_message,
+                    "emoji": True
+                }
+            }
+        ]
+    }
+
+def create_informational_modal(title, text):
+    return {
+        "type": "modal",
+        "title": {
+            "type": "plain_text",
+            "text": title,
+            "emoji": True
+        },
+        "close": {
+            "type": "plain_text",
+            "text": "Ok",
+            "emoji": True
+        },
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "plain_text",
+                    "text": text,
                     "emoji": True
                 }
             }
