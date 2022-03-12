@@ -92,7 +92,7 @@ SHORT_DESCRIPTIONS = {
     HUNTER: 'If killed, picks someone to die with them with no discussion.',
     FORTUNE_TELLER: 'Can inspect one person each night to determine whether they are a werewolf.',
 
-    ANCIENT: 'If any villager kills them or the townspeople vote to kill them, all villagers lose their powers.',
+    ANCIENT: 'If any villager kills them or the townspeople vote to kill them, all villagers lose their powers. Survives one werewolf target though.',
     ACTOR: 'Moderator has chosen three special roles for them, all unknown to them. They can choose to receive a random role up to three nights.',
     STUTTERING_JUDGE: 'One time during the game at daytime, may signal to the moderator that the following night should be skipped.',
     RAVEN: 'Each night, secretly curses someone else with two votes the following day.',
@@ -164,6 +164,20 @@ ADVANCED_SPECIAL_VILLAGERS = [
     PROSTITUTE,
     NEAPOLITAN,
     FRUIT_VENDOR,
+]
+
+# Slack supports only 10 options in a checkbox
+TRUNCATED_SPECIAL_VILLAGERS = [
+    DOCTOR,
+    WITCH,
+    HUNTER,
+    FORTUNE_TELLER,
+    FRUIT_VENDOR,
+    VIGILANTE,
+    BODYGUARD,
+    INNOCENT_CHILD,
+    JAILER,
+    NEAPOLITAN
 ]
 
 # These accessory groups are needed for setting up private channels with the moderator
@@ -489,20 +503,13 @@ def find_purgatory_channel_id():
 
 
 def find_wolfbot_member_id(bot_id):
-    return slack_client.bots_info(bot_id).get('user_id')   
+    return slack_client.bots_info(bot=bot_id)['bot']['user_id']
 
     
 def assign_roles_and_configure_slack(team_id, bot_id):
     current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': team_id})['Item']
 
     moderator_id = current_game_config['moderator_id']
-
-    # Clear werewolf channel of all but the moderator and the bot
-    remove_players_from_channel(find_werewolves_channel_id(), moderator_id, bot_id)
-
-
-    # Archive role channels. Below we will unarchive only those needed.
-    archive_private_channels()
 
     # Configure village, purgatory, and werewolves channels. Village should have everyone and 
     # purgatory should have no one but the moderator and WolfBot.
@@ -512,6 +519,13 @@ def assign_roles_and_configure_slack(team_id, bot_id):
     configure_purgatory_channel(moderator_id, bot_id)
 
     configure_werewolves_channel(moderator_id, bot_id)
+
+    # Clear werewolf channel of all but the moderator and the bot
+    remove_players_from_channel(find_werewolves_channel_id(), moderator_id, bot_id)
+
+
+    # Archive role channels. Below we will unarchive only those needed.
+    archive_private_channels()
 
     # randomly assign roles
     game_roles = current_game_config['game_roles']
@@ -693,7 +707,7 @@ def create_configure_villagers_modal(num_wolves, num_players):
                                 "text": f"{SHORT_DESCRIPTIONS[role]}"
                             },
                             "value": role
-                        } for role in ALL_SPECIAL_VILLAGERS
+                        } for role in TRUNCATED_SPECIAL_VILLAGERS
                     ],
                     "action_id": "special_villager-action",
                 }
