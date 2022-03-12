@@ -86,16 +86,6 @@ def main():
                             "type": "button",
                             "text": {
                                 "type": "plain_text",
-                                "text": "Call for vote",
-                                "emoji": True
-                            },
-                            "style": "primary",
-                            "value": "call_vote"
-                        },
-                        {
-                            "type": "button",
-                            "text": {
-                                "type": "plain_text",
                                 "text": "Begin night",
                                 "emoji": True
                             },
@@ -106,7 +96,27 @@ def main():
                             "type": "button",
                             "text": {
                                 "type": "plain_text",
-                                "text": "See current game status",
+                                "text": "Call for vote",
+                                "emoji": True
+                            },
+                            "style": "primary",
+                            "value": "call_vote"
+                        },
+                        {
+                            "type": "button",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "End vote",
+                                "emoji": True
+                            },
+                            "style": "primary",
+                            "value": "end_vote"
+                        },
+                        {
+                            "type": "button",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "See game status",
                                 "emoji": True
                             },
                             "value": "see_status"

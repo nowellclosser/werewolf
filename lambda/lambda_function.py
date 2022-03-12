@@ -327,6 +327,25 @@ UNDO_KILL_PLAYER_MODAL = {
     ]
 }
 
+VOTE_MESSAGE_BLOCKS = [
+    {
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": "Who do you vote to kill?"
+        },
+        "accessory": {
+            "type": "button",
+            "text": {
+                "type": "plain_text",
+                "text": "Choose",
+                "emoji": True
+            },
+            "action_id": "click_vote"
+        }
+	}
+]
+
 CONFIGURE_WEREWOLVES_TITLE = "Werewolf Configuration"
 CONFIGURE_VILLAGERS_TITLE = "Villager Configuration"
 
@@ -355,31 +374,6 @@ def parse_button_push(event):
             trigger_id=trigger_id,
             view=json.dumps(PICK_PLAYERS_MODAL)
         )
-    if event['actions'][0].get('value') == 'kill_player':
-        slack_client.views_open(
-            trigger_id=trigger_id,
-            view=json.dumps(KILL_PLAYER_MODAL)
-        )
-    if event['actions'][0].get('value') == 'undo_kill_player':
-        slack_client.views_open(
-            trigger_id=trigger_id,
-            view=json.dumps(UNDO_KILL_PLAYER_MODAL)
-        )
-    if event['actions'][0].get('value') == 'see_status':
-        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
-        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
-            response_text = "There is no game currently in play"  
-        else:
-            # TODO: improve format
-            response_text = json.dumps(
-                {get_member_name(player_id): player_status for player_id, player_status in current_game_config["game_state"].items()},
-                indent=4
-            )
-
-        slack_client.views_open(
-            trigger_id=trigger_id,
-            view=json.dumps(create_informational_modal("Current Game Status", response_text))
-        )
     if event['actions'][0].get('value') == 'see_alive_players':
         current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
         if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
@@ -397,6 +391,82 @@ def parse_button_push(event):
             trigger_id=trigger_id,
             view=json.dumps(create_informational_modal("Currently Alive Players", response_text))
         )
+
+    if event['actions'][0].get('value') == 'kill_player':
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
+        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play"))
+            )
+        elif event['user']['id'] != current_game_config['moderator_id']:
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Authorized", "You are not the moderator!"))
+            )
+        else:
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(KILL_PLAYER_MODAL)
+            )
+    if event['actions'][0].get('value') == 'undo_kill_player':
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
+        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play"))
+            )
+        elif event['user']['id'] != current_game_config['moderator_id']:
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Authorized", "You are not the moderator!"))
+            )
+        else:
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(UNDO_KILL_PLAYER_MODAL)
+            )
+    if event['actions'][0].get('value') == 'see_status':
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
+        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play"))
+            )
+        elif event['user']['id'] != current_game_config['moderator_id']:
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Authorized", "You are not the moderator!"))
+            ) 
+        else:
+            # TODO: improve format
+            response_text = json.dumps(
+                {get_member_name(player_id): player_status for player_id, player_status in current_game_config["game_state"].items()},
+                indent=4
+            )
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Current Game Status", response_text))
+            )
+    
+    if event['actions'][0].get('value') == 'call_vote':
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
+        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play"))
+            )
+        
+        elif event['user']['id'] != current_game_config['moderator_id']:
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Authorized", "You are not the moderator!"))
+            ) 
+
+        else:
+            for player_id in current_game_config["game_state"]:
+                if current_game_config["game_state"][player_id]["alive"]:
+                    slack_client.chat_postMessage(channel=player_id, blocks=json.dumps(VOTE_MESSAGE_BLOCKS))
     
     return {
         'statusCode': 200,
@@ -688,8 +758,7 @@ def assign_roles_and_configure_slack(team_id, bot_id):
     moderator_id = current_game_config['moderator_id']
 
     # Configure village, purgatory, and werewolves channels. Village should have everyone and 
-    # purgatory should have no one but the moderator and WolfBot.
-
+    # purgatory should have no one but the moderator and WolfBot.   
     configure_village_channel(current_game_config['player_ids'], moderator_id, bot_id)
 
     configure_purgatory_channel(moderator_id, bot_id)
@@ -943,4 +1012,3 @@ def create_informational_modal(title, text):
             }
         ]
     }
-
