@@ -3,7 +3,7 @@ import os
 import slack_sdk
 
 def main():
-    slack_client = slack_sdk.WebClient(token=os.environ["SLACK_API_TOKEN"]).views_publish(
+    slack_sdk.WebClient(token=os.environ["SLACK_API_TOKEN"]).views_publish(
         user_id='U012M822WGM',
         view={
             "type": "home",
