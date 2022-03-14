@@ -64,7 +64,7 @@ def main():
                                 "text": "See game rules",
                                 "emoji": True
                             },
-                            "value": "help"
+                            "value": "see_rules"
                         }
                     ]
                 },
@@ -135,7 +135,7 @@ def main():
                             "type": "button",
                             "text": {
                                 "type": "plain_text",
-                                "text": "Undo previous kill",
+                                "text": "Undo a kill",
                                 "emoji": True
                             },
                             "style": "danger",

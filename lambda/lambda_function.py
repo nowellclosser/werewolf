@@ -4,6 +4,7 @@ import urllib.parse
 import os
 import base64
 import random
+from collections import defaultdict
 
 import boto3
 import slack_sdk
@@ -116,21 +117,26 @@ SHORT_DESCRIPTIONS = {
     CURSED_WOLF_FATHER: 'One time during the game, may convert a werewolf "kill" into another werewolf instead.',
 }
 
-VILLAGER_WAKE_UP_PRIORITY = [
-    PROSTITUTE,
-    JAILER,
-    FRUIT_VENDOR,
-    ACTOR,
-    DOCTOR,
-    WITCH,
-    FORTUNE_TELLER,
-    RAVEN,
-    GUARDIAN_ANGEL,
-    BABYSITTER,
-    BODYGUARD,
-    VIGILANTE,
-    NEAPOLITAN,
-]
+SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_PROMPT = {
+    BIG_BAD_WEREWOLF: "Who would you like to kill?",
+    BLOCKER_WOLF: "Whose powers would you like to block, if they have any?",
+    PROSTITUTE: "Who will you visit?",
+    JAILER: "Would you like to protect anyone?",
+    FRUIT_VENDOR: "Who would you like to give fruit to, and what kind of fruit?",
+    ACTOR: "Would you like to assume a special role tonight?",
+    DOCTOR: "Who would you like to protect?",
+    WITCH: "Would you like to kill and/or protect anyone?",
+    FORTUNE_TELLER: "Who would you like to inspect?",
+    RAVEN: "Who would you like to curse?",
+    GUARDIAN_ANGEL: "Who would you like to protect?",
+    BABYSITTER: "Would you like to protect anyone?",
+    BODYGUARD: "Would you like to protect anyone?",
+    VIGILANTE: "Would you like to kill anyone?",
+    NEAPOLITAN: "Who would you like to inspect?",
+}
+
+#TODO: Extra per-role notes for moderator
+#TODO: Kill handler with reminders
 
 STANDARD_SPECIAL_VILLAGERS = [
     DOCTOR,
@@ -184,10 +190,163 @@ TRUNCATED_SPECIAL_VILLAGERS = [
 ALL_SPECIAL_VILLAGERS = STANDARD_SPECIAL_VILLAGERS + ADVANCED_SPECIAL_VILLAGERS
 ALL_WEREWOLVES = [WEREWOLF, *SPECIAL_WEREWOLVES]
 
-#TODO: Notes for moderator about who has to wake up and things to keep track of
-
 assert len(ROLE_DESCRIPTIONS) == len(STANDARD_SPECIAL_VILLAGERS) + len(ADVANCED_SPECIAL_VILLAGERS) + len(SPECIAL_WEREWOLVES) + 2
 assert len(ROLE_DESCRIPTIONS) == len(SHORT_DESCRIPTIONS)
+assert len(TRUNCATED_SPECIAL_VILLAGERS) == 10
+
+APP_HOME_VIEW = {
+    "type": "home",
+    "blocks": [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "Welcome to Werewolf Home!"
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "plain_text",
+                "text": "What would you like to do?",
+                "emoji": True
+            }
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Start a new game",
+                        "emoji": True
+                    },
+                    "style": "primary",
+                    "value": "start_game"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "See alive players",
+                        "emoji": True
+                    },
+                    "value": "see_alive_players"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "See possible roles",
+                        "emoji": True
+                    },
+                    "value": "see_roles"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "See game rules",
+                        "emoji": True
+                    },
+                    "value": "see_rules"
+                }
+            ]
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "plain_text",
+                "text": "If you are currently moderating a game, you may use the following:",
+                "emoji": True
+            }
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Begin night",
+                        "emoji": True
+                    },
+                    "style": "primary",
+                    "value": "begin_night"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Call for vote",
+                        "emoji": True
+                    },
+                    "style": "primary",
+                    "value": "call_vote"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "End vote",
+                        "emoji": True
+                    },
+                    "style": "primary",
+                    "value": "end_vote"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "See game status",
+                        "emoji": True
+                    },
+                    "value": "see_status"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Kill a player",
+                        "emoji": True
+                    },
+                    "style": "danger",
+                    "value": "kill_player"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Undo a kill",
+                        "emoji": True
+                    },
+                    "style": "danger",
+                    "value": "undo_kill_player"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "End game",
+                        "emoji": True
+                    },
+                    "style": "danger",
+                    "value": "end_game"
+                }
+            ]
+        },
+        {
+            "type": "divider"
+        }
+    ]
+}
 
 PICK_PLAYERS_TITLE = "Player Configuration"
 PICK_PLAYERS_MODAL = {
@@ -273,7 +432,7 @@ KILL_PLAYER_MODAL = {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "Who will die?"
+                "text": "Who will be killed?"
             },
             "accessory": {
                 "type": "users_select",
@@ -288,7 +447,7 @@ KILL_PLAYER_MODAL = {
     ]
 }
 
-UNDO_KILL_PLAYER_TITLE = "Undo a previous kill"
+UNDO_KILL_PLAYER_TITLE = "Undo a kill"
 UNDO_KILL_PLAYER_MODAL = {
     "title": {
         "type": "plain_text",
@@ -312,7 +471,7 @@ UNDO_KILL_PLAYER_MODAL = {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "Who will die?"
+                "text": "Who will be revived?"
             },
             "accessory": {
                 "type": "users_select",
@@ -332,7 +491,7 @@ VOTE_MESSAGE_BLOCKS = [
         "type": "section",
         "text": {
             "type": "mrkdwn",
-            "text": "Who do you vote to kill?"
+            "text": "It's time to vote. Who do you vote to kill?"
         },
         "accessory": {
             "type": "button",
@@ -341,10 +500,50 @@ VOTE_MESSAGE_BLOCKS = [
                 "text": "Choose",
                 "emoji": True
             },
+            "value": "click_vote",
             "action_id": "click_vote"
         }
 	}
 ]
+
+SUBMIT_VOTE_TITLE = "Vote to kill someone"
+SUBMIT_VOTE_MODAL = {
+    "title": {
+        "type": "plain_text",
+        "text": SUBMIT_VOTE_TITLE,
+        "emoji": True
+    },
+    "submit": {
+        "type": "plain_text",
+        "text": "Submit",
+        "emoji": True
+    },
+    "type": "modal",
+    "close": {
+        "type": "plain_text",
+        "text": "Cancel",
+        "emoji": True
+    },
+    "blocks": [
+        {
+            "block_id": "submit_vote_block",
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "Who do you choose?"
+            },
+            "accessory": {
+                "type": "users_select",
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "Select a townsperson",
+                    "emoji": True
+                },
+                "action_id": "submit_vote-action",
+            },
+        },
+    ]
+}
 
 CONFIGURE_WEREWOLVES_TITLE = "Werewolf Configuration"
 CONFIGURE_VILLAGERS_TITLE = "Villager Configuration"
@@ -359,13 +558,30 @@ def lambda_handler(event, context):
         event = json.loads(urllib.parse.unquote(base64.b64decode(event['body']).decode("utf-8")).strip('payload='))
     else:
         event = json.loads(event["body"])
+        
+        # This is needed to verify event submission endpoints
+        if 'challenge' in event:
+            return {
+                'statusCode': 200,
+                'body': event['challenge']
+            }
+        
         event = event['event']
     print(event)
     if event['type'] == 'block_actions':
         return parse_button_push(event)
     if event['type'] == 'view_submission':
         return parse_view_submission(event)
-        
+    if event['type'] == 'app_home_opened':
+        handle_app_home_opened(event)
+
+def handle_app_home_opened(event):
+    # TODO: Figure out a way to propagate home updates
+    if 'view' not in event:
+        slack_client.views_publish(
+            user_id=event['user'],
+            view=APP_HOME_VIEW
+        )       
 
 def parse_button_push(event):
     trigger_id = event['trigger_id']
@@ -376,8 +592,8 @@ def parse_button_push(event):
         )
     if event['actions'][0].get('value') == 'see_alive_players':
         current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
-        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
-            response_text = "There is no game currently in play"  
+        if not current_game_config or not current_game_config.get("game_state") or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+            response_text = "There is no game currently in play."  
         else:
             # TODO: improve format
             alive_players = [
@@ -391,13 +607,12 @@ def parse_button_push(event):
             trigger_id=trigger_id,
             view=json.dumps(create_informational_modal("Currently Alive Players", response_text))
         )
-
     if event['actions'][0].get('value') == 'kill_player':
         current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
-        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+        if not current_game_config or not current_game_config.get("game_state") or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
             slack_client.views_open(
                 trigger_id=trigger_id,
-                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play"))
+                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play."))
             )
         elif event['user']['id'] != current_game_config['moderator_id']:
             slack_client.views_open(
@@ -411,10 +626,10 @@ def parse_button_push(event):
             )
     if event['actions'][0].get('value') == 'undo_kill_player':
         current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
-        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+        if not current_game_config or not current_game_config.get("game_state") or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
             slack_client.views_open(
                 trigger_id=trigger_id,
-                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play"))
+                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play."))
             )
         elif event['user']['id'] != current_game_config['moderator_id']:
             slack_client.views_open(
@@ -426,12 +641,49 @@ def parse_button_push(event):
                 trigger_id=trigger_id,
                 view=json.dumps(UNDO_KILL_PLAYER_MODAL)
             )
-    if event['actions'][0].get('value') == 'see_status':
+    if event['actions'][0].get('value') == 'begin_night':
         current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
-        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+        if not current_game_config or not current_game_config.get("game_state") or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
             slack_client.views_open(
                 trigger_id=trigger_id,
-                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play"))
+                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play."))
+            )
+        elif event['user']['id'] != current_game_config['moderator_id']:
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Authorized", "You are not the moderator!"))
+            ) 
+        else:
+            steps = []
+
+            # Add universal steps
+            steps.append("Say *'Night Falls'*.\n Instruct players to turn off video and sound if applicable.")
+            steps.append("*'Werewolves, please wake up and decide who to kill'*.\n Force them to come to a consensus on who to kill in the werewolves slack channel.\n *'Werewolves, please go to sleep.'*")
+
+            alive_game_roles = [player_status['role'] for player_status in current_game_config['game_state'].values() if player_status['alive']]
+
+            for special_role, prompt in SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_PROMPT.items():
+                if special_role in current_game_config['game_roles']:
+                    if special_role in alive_game_roles:
+                        middle_text = 'Have a conversation with them in their individual role channel until they decide what to do.'
+                    else:
+                        middle_text = "This player is dead, so just pause for a believable amount of time unless this is a role where it's obvious when they're dead."
+
+                    steps.append(f"*'{special_role}, please wake up. {prompt}'* \n {middle_text} \n *'{special_role}, please go to sleep.'*")
+            
+            steps.append("*'Everyone wakes up, except for ___________'* (_list the players who were killed_).\n If someone was targeted for a kill but saved, make up a story about their near miss now. \n *'Town meeting starts now.'* \n Instruct people to turn video and sound back on and _press the kill button for any players who died._")
+
+            response_text = '\n\n'.join([f"*{idx + 1}.* {step}" for idx, step in enumerate(steps)])
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Nighttime Playbook", response_text))
+            )
+    if event['actions'][0].get('value') == 'see_status':
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
+        if not current_game_config or not current_game_config.get("game_state") or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+            slack_client.views_open(
+                trigger_id=trigger_id,
+                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play."))
             )
         elif event['user']['id'] != current_game_config['moderator_id']:
             slack_client.views_open(
@@ -447,14 +699,13 @@ def parse_button_push(event):
             slack_client.views_open(
                 trigger_id=trigger_id,
                 view=json.dumps(create_informational_modal("Current Game Status", response_text))
-            )
-    
+            ) 
     if event['actions'][0].get('value') == 'call_vote':
         current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
-        if not current_game_config or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+        if not current_game_config or not current_game_config.get("game_state") or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
             slack_client.views_open(
                 trigger_id=trigger_id,
-                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play"))
+                view=json.dumps(create_informational_modal("Not Applicable", "There is no game currently in play."))
             )
         
         elif event['user']['id'] != current_game_config['moderator_id']:
@@ -464,14 +715,56 @@ def parse_button_push(event):
             ) 
 
         else:
+            dynamodb.Table(WEREWOLF_TABLE_NAME).update_item(
+                Key={'ID': event['team']['id']},
+                UpdateExpression='SET vote_in_progress = :i, vote_record = :j',
+                ExpressionAttributeValues={
+                    ':i': True,
+                    ':j': {}
+                }
+            )
             for player_id in current_game_config["game_state"]:
                 if current_game_config["game_state"][player_id]["alive"]:
                     slack_client.chat_postMessage(channel=player_id, blocks=json.dumps(VOTE_MESSAGE_BLOCKS))
+    if event['actions'][0].get('value') == 'end_vote':
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']})['Item']
+        end_vote(event['team']['id'], current_game_config['vote_record'])
+    if event['actions'][0].get('action_id') == 'click_vote':
+        slack_client.views_open(
+            trigger_id=trigger_id,
+            view=json.dumps(SUBMIT_VOTE_MODAL)
+        )
     
     return {
         'statusCode': 200,
         'body': ''
     }
+
+def end_vote(team_id, vote_record):
+    dynamodb.Table(WEREWOLF_TABLE_NAME).update_item(
+        Key={'ID': team_id},
+        UpdateExpression='SET vote_in_progress = :i, vote_record = :j',
+        ExpressionAttributeValues={
+            ':i': False,
+            ':j': {}
+        }
+    )
+    vote_tally = defaultdict(int)
+    for player_id, target_id in vote_record.items():
+        vote_tally[target_id] += 1
+
+    ordered_vote_tally = dict(sorted(vote_tally.items(), key=lambda item: item[1], reverse=True))
+    vote_summary = "The vote is complete! Tally:"
+    for target_id, tally in ordered_vote_tally.items():
+        vote_summary += f'\n*{get_member_name(target_id)}*: {tally}'
+    vote_summary += f'\n\nHere are the individual votes:'
+    for player_id, target_id in vote_record.items():
+        vote_summary += f'\n*{get_member_name(player_id)}*: _{get_member_name(target_id)}_'
+    slack_client.chat_postMessage(
+        channel=find_village_channel_id(),
+        text=vote_summary,
+        link_names=True
+    )
 
 def get_member_name(member_id):
     member_info = slack_client.users_info(user=member_id).data['user']
@@ -483,7 +776,6 @@ def is_bot(player_id):
 
 
 def parse_view_submission(event):
-    # TODO: Validate players are not bots
     if event['view']['title']['text'] == urllib.parse.quote_plus(PICK_PLAYERS_TITLE):
         moderator_id = event['view']['state']['values']['moderator_select_block']['select_moderator-action']['selected_user']
         player_ids = event['view']['state']['values']['player_select_block']['select_players-action']['selected_users']
@@ -499,7 +791,9 @@ def parse_view_submission(event):
                 'moderator_id': moderator_id,
                 'player_ids': player_ids,
                 'game_roles': [],
-                'game_state': {}
+                'game_state': {},
+                'vote_in_progress': False,
+                'vote_record': {}
             }
         )
         return {
@@ -588,6 +882,10 @@ def parse_view_submission(event):
             }
         )
 
+        slack_client.conversations_invite(channel=find_purgatory_channel_id(), users=victim_id)
+
+        # TODO: Could remove from werewolves channel. If so need to add back
+
         return {
             "response_action": "clear"
         }
@@ -612,6 +910,54 @@ def parse_view_submission(event):
             }
         )
 
+        slack_client.conversations_kick(channel=find_purgatory_channel_id(), user=victim_id)
+
+        # TODO: ADd back to werewolf channel if we start removing
+
+        return {
+            "response_action": "clear"
+        }
+
+    if event['view']['title']['text'] == urllib.parse.quote_plus(SUBMIT_VOTE_TITLE):
+        current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']})['Item']
+        victim_id = event['view']['state']['values']['submit_vote_block']['submit_vote-action']['selected_user']
+
+        if not current_game_config['vote_in_progress']:
+            return {
+                "response_action": "update",
+                "view": create_informational_modal("Not Applicable", "No vote is in progress.")
+            }
+        
+        if current_game_config['vote_record'].get(event['user']['id']):
+            return {
+                "response_action": "update",
+                "view": create_informational_modal("Not Authorized", "You have already submitted a vote.")
+            }
+
+        if victim_id not in current_game_config['game_state'] or not current_game_config['game_state'][victim_id]['alive']:
+            return {
+                "response_action": "push",
+                "view": create_validation_error_modal("You must select an alive player in the current game.")
+            }
+        
+        # Note that this must handle concurrent updates! You can't simply replace the voting record like you can for
+        # similar types of updates during moderator actions
+        updated_vote_record = dynamodb.Table(WEREWOLF_TABLE_NAME).update_item(
+            Key={'ID': event['team']['id']},
+            UpdateExpression='SET vote_record.#pid = :i',
+            ReturnValues='ALL_NEW',
+            ExpressionAttributeNames={
+                '#pid': event['user']['id']
+            },
+            ExpressionAttributeValues={
+                ':i': victim_id
+            }
+        )['Attributes']['vote_record']
+
+        # Automatically conclude vote if all votes are in
+        if len(updated_vote_record) == sum([player_state["alive"] for player_state in current_game_config["game_state"].values()]):
+            end_vote(event['team']['id'], updated_vote_record)
+
         return {
             "response_action": "clear"
         }
@@ -623,12 +969,12 @@ def archive_private_channels(exceptions=None):
         if channel['id'] not in exceptions and not channel['is_archived'] and channel['name'].startswith(WEREWOLF_CHANNEL_PREFIX):
             slack_client.conversations_archive(channel=channel['id'])
 
-def create_channel_name(text):
+def derive_channel_name(text):
     return f"{WEREWOLF_CHANNEL_PREFIX}{text.lower().replace(' ', '_')}"
 
 
 def create_or_unarchive_private_channel(name, moderator_id, bot_id):
-    name = create_channel_name(name)
+    name = derive_channel_name(name)
     # If channel is archived, unarchive it
     for channel in slack_client.conversations_list(types='private_channel').data['channels']:
         if channel['name'] == name:
@@ -660,7 +1006,7 @@ def remove_players_from_channel(channel_id, moderator_id, bot_id):
 
 
 def configure_village_channel(player_ids, moderator_id, bot_id):
-    name = create_channel_name("village")
+    name = derive_channel_name("village")
     
     # If channel exists, use it
     for channel in slack_client.conversations_list(types='public_channel').data['channels']:
@@ -684,14 +1030,14 @@ def configure_village_channel(player_ids, moderator_id, bot_id):
 
 def find_village_channel_id():
     for channel in slack_client.conversations_list(types='public_channel').data['channels']:
-        if channel['name'] == create_channel_name("village"):
+        if channel['name'] == derive_channel_name("village"):
             return channel['id']
     
     raise Exception("Village channel not found")
 
 
 def configure_werewolves_channel(moderator_id, bot_id):
-    name = create_channel_name("werewolves")
+    name = derive_channel_name("werewolves")
     
     # If channel exists, use it
     for channel in slack_client.conversations_list(types='private_channel').data['channels']:
@@ -706,45 +1052,49 @@ def configure_werewolves_channel(moderator_id, bot_id):
             is_private=True
         )
     
-    # Make sure moderator and bot are in channel
+    # Make sure moderator is in channel
     try:
-        slack_client.conversations_invite(channel=find_werewolves_channel_id(), users=','.join([moderator_id, bot_id]))
+        slack_client.conversations_invite(channel=find_werewolves_channel_id(), users=moderator_id)
     except:
         pass
 
 
 def find_werewolves_channel_id():
     for channel in slack_client.conversations_list(types='private_channel').data['channels']:
-        if channel['name'] == create_channel_name("werewolves"):
+        if channel['name'] == derive_channel_name("werewolves"):
             return channel['id']
 
 
 def configure_purgatory_channel(moderator_id, bot_id):
-    name = create_channel_name("purgatory")
+    name = derive_channel_name("purgatory")
     
     # If channel exists, use it
     for channel in slack_client.conversations_list(types='private_channel').data['channels']:
         if channel['name'] == name:
+            print("found channel")
             if channel['is_archived']:
+                print("found archived")
                 slack_client.conversations_unarchive(channel=channel['id'], as_user=True)
             break
+        print("didn't find channel")
     else:
+        print("creating purgatory")
         # Otherwise create it
         slack_client.conversations_create(
             name=name,
             is_private=True
         )
     
-    # Make sure moderator and bot are in channel
+    # Make sure moderator is in channel
     try:
-        slack_client.conversations_invite(channel=find_purgatory_channel_id(), users=','.join([moderator_id, bot_id]))
+        slack_client.conversations_invite(channel=find_purgatory_channel_id(), users=moderator_id)
     except:
         pass
 
 
 def find_purgatory_channel_id():
     for channel in slack_client.conversations_list(types='private_channel').data['channels']:
-        if channel['name'] == create_channel_name("purgatory"):
+        if channel['name'] == derive_channel_name("purgatory"):
             return channel['id']
 
 
@@ -767,6 +1117,9 @@ def assign_roles_and_configure_slack(team_id, bot_id):
 
     # Clear werewolf channel of all but the moderator and the bot
     remove_players_from_channel(find_werewolves_channel_id(), moderator_id, bot_id)
+
+    # Clear purgatory channel of all but the moderator and the bot
+    remove_players_from_channel(find_purgatory_channel_id(), moderator_id, bot_id)
 
     # Archive role channels. Below we will unarchive only those needed.
     archive_private_channels()
@@ -1005,9 +1358,8 @@ def create_informational_modal(title, text):
             {
                 "type": "section",
                 "text": {
-                    "type": "plain_text",
+                    "type": "mrkdwn",
                     "text": text,
-                    "emoji": True
                 }
             }
         ]
