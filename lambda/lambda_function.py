@@ -114,23 +114,68 @@ SHORT_DESCRIPTIONS = {
     # CURSED_WOLF_FATHER: 'One time during the game, may convert a werewolf "kill" into another werewolf instead.',
 }
 
-SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_PROMPT = {
+SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_INFO = {
     # CURSED_WOLF_FATHER: "Would you like to convert the werewolves' kill?",
-    BIG_BAD_WEREWOLF: "Who would you like to kill?",
-    BLOCKER_WOLF: "Whose powers would you like to block, if they have any?",
-    PROSTITUTE: "Who will you visit?",
-    JAILER: "Would you like to protect anyone?",
-    FRUIT_VENDOR: "Who would you like to give fruit to, and what kind of fruit?",
-    ACTOR: "Would you like to assume a special role tonight?",
-    DOCTOR: "Who would you like to protect?",
-    WITCH: "Would you like to kill and/or protect anyone?",
-    FORTUNE_TELLER: "Who would you like to inspect?",
-    RAVEN: "Who would you like to curse?",
-    GUARDIAN_ANGEL: "Who would you like to protect?",
-    BABYSITTER: "Would you like to protect anyone?",
-    BODYGUARD: "Would you like to protect anyone?",
-    VIGILANTE: "Would you like to kill anyone?",
-    NEAPOLITAN: "Who would you like to inspect?",
+    BIG_BAD_WEREWOLF: {
+        "prompt": "Who would you like to kill?",
+        "helpers": []
+    },
+    BLOCKER_WOLF: {
+        "prompt": "Whose powers would you like to block, if they have any?",
+        "helpers": []
+    },
+    PROSTITUTE: {
+        "prompt": "Who will you visit?",
+        "helpers": []
+    },
+    JAILER: {
+        "prompt": "Would you like to protect anyone?",
+        "helpers": []
+    },
+    FRUIT_VENDOR: {
+        "prompt": "Who would you like to give fruit to, and what kind of fruit?",
+        "helpers": ["Remember to send the fruit now! It's very easy to forget if you move on to the next step first"]
+    },
+    ACTOR: {
+        "prompt": "Would you like to assume a special role tonight?",
+        "helpers": []
+    },
+    DOCTOR: {
+        "prompt": "Who would you like to protect?",
+        "helpers": []
+    },
+    WITCH: {
+        "prompt": "Would you like to kill and/or protect anyone?",
+        "helpers": []
+    },
+    FORTUNE_TELLER: {
+        "prompt": "Who would you like to inspect?",
+        "helpers": []
+    },
+    RAVEN: {
+        "prompt": "Who would you like to curse?",
+        "helpers": []
+    },
+    GUARDIAN_ANGEL: {
+        "prompt": "Who would you like to protect?",
+        "helpers": []
+    },
+    BABYSITTER: {
+        "prompt": "Would you like to protect anyone?",
+        "helpers": []
+    },
+    BODYGUARD: {
+        "prompt": "Would you like to protect anyone?",
+        "helpers": []
+    },
+    VIGILANTE: {
+        "prompt": "Would you like to kill anyone?",
+        "helpers": []
+    },
+    NEAPOLITAN: {
+        "prompt": "Who would you like to inspect?",
+        "helpers": []
+    },
 }
 
 #TODO: Extra per-role notes for moderator
@@ -641,7 +686,6 @@ def lambda_handler(event, context):
         }
 
     # Handle typical app behavior
-
     if event["isBase64Encoded"]:
         nested_event = json.loads(urllib.parse.unquote(base64.b64decode(event['body']).decode("utf-8")).strip('payload='))
     else:
@@ -655,6 +699,8 @@ def lambda_handler(event, context):
             }
         
         nested_event = event['event']
+    
+    print(event)
 
     team_id = nested_event.get('team', {}).get('id') or event['team_id']
     access_token = dynamodb.Table(AUTH_TABLE_NAME).get_item(Key={'ID': team_id}).get('Item')["access_token"]
@@ -704,6 +750,22 @@ def parse_button_push(event, slack_client):
                 trigger_id=trigger_id,
                 view=json.dumps(create_informational_modal("Current Player Status", response_text))
             )
+    if event['actions'][0].get('value') == 'see_roles':
+        response_text = ''
+        for role in [VILLAGER] + TRUNCATED_SPECIAL_VILLAGERS + ALL_WEREWOLVES:
+            response_text += f'*{role}* : {SHORT_DESCRIPTIONS[role]}\n\n'
+
+        slack_client.views_open(
+            trigger_id=trigger_id,
+            view=json.dumps(create_informational_modal("Possible Game Roles", response_text))
+        )
+    if event['actions'][0].get('value') == 'see_rules':
+        response_text = "You are a member of a village that has been infiltrated by werewolves.  The game begins at nighttime, when the moderator wakes up the werewolves and they decide who to kill.  The moderator also wakes up any special villagers that have abilities at nighttime, like saving people targeted by the werewolves. For more details about these special roles, click on the button to see possible roles.  Then, everyone wakes up and attends a town meeting, where villagers and werewolves together decide on who to kill during a town meeting. But the villagers do not know who the werewolves are.  The villagers' goal is to kill all the werewolves, primarily during the day, and the werewolves' goal is to kill all the villagers. At some point during the day the moderator will call for a vote, and whoever gets the most votes will die.  If there is a tie, there will be a new meeting to discuss which of the tied players to kill.  When someone has died, nighttime begins again, and the cycle repeats.\n\n Notes:\n- If a special villager is targeted by the werewolves at night, they can still use their powers that night.\n- You may vote for yourself."
+
+        slack_client.views_open(
+            trigger_id=trigger_id,
+            view=json.dumps(create_informational_modal("Loose game rules", response_text))
+        ) 
     if event['actions'][0].get('value') == 'kill_player':
         current_game_config = dynamodb.Table(WEREWOLF_TABLE_NAME).get_item(Key={'ID': event['team']['id']}).get('Item')
         if not current_game_config or not current_game_config.get("game_state") or all([not player_state["alive"] for player_state in current_game_config["game_state"].values()]):
@@ -754,21 +816,29 @@ def parse_button_push(event, slack_client):
             steps = []
 
             # Add universal steps
+            steps.append("First, click the button to open this modal in a new window and position it so that you can keep it open and do other things in Slack.")
             steps.append("Say *'Night Falls'*.\n Instruct players to turn off video and sound if applicable.")
-            steps.append("*'Werewolves, please wake up and decide who to kill'*.\n Force them to come to a consensus on who to kill in the werewolves slack channel.\n *'Werewolves, please go to sleep.'*")
+            steps.append("*'Werewolves, please wake up and decide who to kill'*.\n Force them to come to a consensus on who to kill in the werewolves slack channel.")
 
             alive_game_roles = [player_status['role'] for player_status in current_game_config['game_state'].values() if player_status['alive']]
 
-            for special_role, prompt in SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_PROMPT.items():
+            # Add dynamic steps
+            for special_role, info_dict in SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_INFO.items():
                 if special_role in current_game_config['game_roles']:
                     if special_role in alive_game_roles:
                         middle_text = 'Have a conversation with them in their individual role channel until they decide what to do.'
+                        if info_dict["helpers"]:
+                            middle_text += "\n_HELPFUL NOTES_:"
+                            for helper in info_dict["helpers"]:
+                                middle_text += f'\n- {helper}'
+
                     else:
                         middle_text = "This player is dead, so just pause for a believable amount of time unless this is a role where it's obvious when they're dead."
 
-                    steps.append(f"*'{special_role}, please wake up. {prompt}'* \n {middle_text} \n *'{special_role}, please go to sleep.'*")
+                    steps.append(f"*'{special_role}, please wake up. {info_dict['prompt']}'* \n {middle_text}")
             
-            steps.append("*'Everyone wakes up, except for ___________'* (_list the players who were killed_).\n If someone was targeted for a kill but saved, make up a story about their near miss now. \n *'Town meeting starts now.'* \n Instruct people to turn video and sound back on and _press the kill button for any players who died._")
+            # Add final universal step
+            steps.append("If anyone died: *'Everyone wakes up, except for ___________.'*  Otherwise, just *'Everyone wakes up.'*\n If someone was targeted for a kill but saved, make up a story about their near miss now. \n *'Town meeting starts now.'* \n Instruct people to turn video and sound back on. \n\n _REMEMBER TO PRESS THE KILL BUTTON FOR ANY PLAYERS WHO HAVE DIED!_")
 
             response_text = '\n\n'.join([f"*{idx + 1}.* {step}" for idx, step in enumerate(steps)])
             slack_client.views_open(
@@ -788,10 +858,6 @@ def parse_button_push(event, slack_client):
                 view=json.dumps(create_informational_modal("Not Authorized", "You are not the moderator!"))
             ) 
         else:
-            response_text = json.dumps(
-                {get_member_name(player_id, slack_client): player_status for player_id, player_status in current_game_config["game_state"].items()},
-                indent=4
-            )
             response_text = ''
             for player_id, player_status in current_game_config["game_state"].items():
                 if not player_status['alive']:
@@ -836,7 +902,8 @@ def parse_button_push(event, slack_client):
                 trigger_id=trigger_id,
                 view=json.dumps(create_informational_modal("Not Applicable", "No vote is in progress."))
         )
-        end_vote(event['team']['id'], current_game_config['vote_record'], slack_client)
+        else:
+            end_vote(event['team']['id'], current_game_config['vote_record'], slack_client)
     if event['actions'][0].get('action_id') == 'click_vote':
         slack_client.views_open(
             trigger_id=trigger_id,
