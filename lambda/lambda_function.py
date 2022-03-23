@@ -102,15 +102,15 @@ SHORT_DESCRIPTIONS = {
     VIGILANTE: 'Decides each night whether to kill another player, but has only two kills the whole game. If they kill a villager, they also die from guilt.',
     MILLER: 'Will appear guilty if inspected by a fortune-teller-like role. No active special powers.',
     PRIEST: 'Every time someone dies, learns whether they were a werewolf or villager.',
-    INNOCENT_CHILD: 'At any point during the game you may instruct the moderator to confirm to the group that you are a villager',
+    INNOCENT_CHILD: 'At any point during the game, may instruct the moderator to confirm to the group that you are a villager',
     FRIENDLY_NEIGHBOR: 'Once during the game, may instruct the moderator to confirm to a second player of their choosing that they are a villager.',
-    PROSTITUTE: 'Must choose someone to visit every night. If they have a special role, they lose it for the night.',
+    PROSTITUTE: 'Must choose someone to visit every night. If that person has a special role, they lose it for the night.',
     NEAPOLITAN: 'Will inspect someone each night.  The moderator will merely indicate whether that person is a PLAIN villager or not.',
     FRUIT_VENDOR: 'Each night, you may instruct the moderator to send someone fruit on your behalf, which does nothing.',
 
     ALPHA_WEREWOLF: 'Appears to be a villager if inspected by a fortune-teller-like role.',
     BIG_BAD_WEREWOLF: 'As long as no werewolves have been eliminated, performs a second kill each night.',
-    BLOCKER_WOLF: 'Choose a player to block each night, making them temporarily lose special abilities if they have any.',
+    BLOCKER_WOLF: 'Chooses a player to block each night, making them temporarily lose special abilities if they have any.',
     # CURSED_WOLF_FATHER: 'One time during the game, may convert a werewolf "kill" into another werewolf instead.',
 }
 
