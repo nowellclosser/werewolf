@@ -114,31 +114,34 @@ SHORT_DESCRIPTIONS = {
     # CURSED_WOLF_FATHER: 'One time during the game, may convert a werewolf "kill" into another werewolf instead.',
 }
 
+
+# This tracks the wake-up priority order, prompt, and helfpul info for nighttime the moderator for each applicable character.
+# More dynamic helper info that depends on the roles in the game will be generated later.
 SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_INFO = {
-    # CURSED_WOLF_FATHER: "Would you like to convert the werewolves' kill?",
+    # CURSED_WOLF_FATHER: 
     BIG_BAD_WEREWOLF: {
         "prompt": "Who would you like to kill?",
-        "helpers": []
+        "helpers": ["Remember that they no longer get an extra kill once any werewolves have been eliminated."]
     },
     BLOCKER_WOLF: {
         "prompt": "Whose powers would you like to block, if they have any?",
-        "helpers": []
+        "helpers": ["Be sure to not allow their targeted player to use their powers.  Still wake the target up but privately tell them what has happened."]
     },
     PROSTITUTE: {
         "prompt": "Who will you visit?",
-        "helpers": []
+        "helpers": ["It is critical that they wake up before other special villagers, because whoever they choose will lose their powers for that night."]
     },
     JAILER: {
         "prompt": "Would you like to protect anyone?",
-        "helpers": []
+        "helpers": ["It is critical that they wake up before other special villagers, because whoever they choose will lose their powers for that night."]
     },
     FRUIT_VENDOR: {
         "prompt": "Who would you like to give fruit to, and what kind of fruit?",
-        "helpers": ["Remember to send the fruit now! It's very easy to forget if you move on to the next step first"]
+        "helpers": ["Send the fruit now! It's very easy to forget if you move on to the next step first."]
     },
     ACTOR: {
         "prompt": "Would you like to assume a special role tonight?",
-        "helpers": []
+        "helpers": ["It may be important that they wake up before other special villagers, depending on their possible roles"]
     },
     DOCTOR: {
         "prompt": "Who would you like to protect?",
@@ -146,11 +149,12 @@ SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_INFO = {
     },
     WITCH: {
         "prompt": "Would you like to kill and/or protect anyone?",
-        "helpers": []
+        "helpers": ["The witch gets only one kill and one protect for the entire game."]
     },
     FORTUNE_TELLER: {
         "prompt": "Who would you like to inspect?",
-        "helpers": []
+        "helpers": [
+        ]
     },
     RAVEN: {
         "prompt": "Who would you like to curse?",
@@ -162,24 +166,24 @@ SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_INFO = {
     },
     BABYSITTER: {
         "prompt": "Would you like to protect anyone?",
-        "helpers": []
+        "helpers": ["Remember that if they die at night, so does whoever they chose to protect, if anyone."]
     },
     BODYGUARD: {
         "prompt": "Would you like to protect anyone?",
-        "helpers": []
+        "helpers": ["Remember that if whoever they protect is targeted by the werewolves, the bodyguard dies instead."]
     },
     VIGILANTE: {
         "prompt": "Would you like to kill anyone?",
-        "helpers": []
+        "helpers": [
+            "The Vigilante gets up to two total kills per game.",
+            "Remember that the Vigilante dies if they kill someone who is not a werewolf!"
+        ]
     },
     NEAPOLITAN: {
         "prompt": "Who would you like to inspect?",
-        "helpers": []
+        "helpers": ["The Neapolitan is told only whether someone is a plain villager or not a plain villager."]
     },
 }
-
-#TODO: Extra per-role notes for moderator
-#TODO: Kill handler with reminders
 
 STANDARD_SPECIAL_VILLAGERS = [
     DOCTOR,
@@ -275,7 +279,7 @@ APP_HOME_VIEW = {
                     "type": "button",
                     "text": {
                         "type": "plain_text",
-                        "text": "See player status",
+                        "text": "See who's still alive",
                         "emoji": True
                     },
                     "value": "see_status_player"
@@ -475,7 +479,7 @@ KILL_PLAYER_MODAL = {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "Who will be killed?"
+                "text": "Who should be killed?"
             },
             "accessory": {
                 "type": "users_select",
@@ -514,7 +518,7 @@ UNDO_KILL_PLAYER_MODAL = {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "Who will be revived?"
+                "text": "Who should be revived (use this if you've made a mistake previously)?"
             },
             "accessory": {
                 "type": "users_select",
@@ -573,7 +577,7 @@ SUBMIT_VOTE_MODAL = {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "Who do you choose?"
+                "text": "Who do you choose? Note that the dropdown options are limited.  You can also start typing a name."
             },
             "accessory": {
                 "type": "users_select",
@@ -663,7 +667,7 @@ dynamodb = boto3.resource('dynamodb')
 def lambda_handler(event, context):
     # Handle OAuth
     if event.get("requestContext", {}).get("http", {}).get("method") == 'GET':
-        # We first pull out the code that slack's authorize method has sent to us after following
+        # We first pull out the code that Slack's authorize method has sent to us after following
         # the supplied redirect URI
         temporary_code = event['queryStringParameters']['code']
 
@@ -717,8 +721,6 @@ def lambda_handler(event, context):
         handle_app_home_opened(nested_event, slack_client)
 
 def handle_app_home_opened(event, slack_client):
-    # TODO: Figure out a way to propagate home updates
-    # if 'view' not in event:
     slack_client.views_publish(
         user_id=event['user'],
         view=APP_HOME_VIEW
@@ -726,6 +728,7 @@ def handle_app_home_opened(event, slack_client):
 
 def parse_button_push(event, slack_client):
     trigger_id = event['trigger_id']
+    
     if event['actions'][0].get('value') == 'start_game':
         slack_client.views_open(
             trigger_id=trigger_id,
@@ -815,30 +818,38 @@ def parse_button_push(event, slack_client):
         else:
             steps = []
 
-            # Add universal steps
+            # Add initial universal steps
             steps.append("First, click the button to open this modal in a new window and position it so that you can keep it open and do other things in Slack.")
             steps.append("Say *'Night Falls'*.\n Instruct players to turn off video and sound if applicable.")
             steps.append("*'Werewolves, please wake up and decide who to kill'*.\n Force them to come to a consensus on who to kill in the werewolves slack channel.")
 
+            steps.append("If you are confident you can keep track of things, there are several special roles below, AND YOU ARE SURE THERE'S NO IMPORTANCE TO THE ORDER OF THE REMAINING WAKEUPS, you can now prompt them all to send information to you in parallel: 'Will the X,Y and Z please wake up and tell me what they'd like to do in their channels.' Otherwise just proceed to the next step and go one-by-one.  Either way, please remember to read the helper notes for each character as you process their information.")
+
             alive_game_roles = [player_status['role'] for player_status in current_game_config['game_state'].values() if player_status['alive']]
 
-            # Add dynamic steps
+            # Add steps that depend on roles in play
             for special_role, info_dict in SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_INFO.items():
                 if special_role in current_game_config['game_roles']:
                     if special_role in alive_game_roles:
-                        middle_text = 'Have a conversation with them in their individual role channel until they decide what to do.'
-                        if info_dict["helpers"]:
-                            middle_text += "\n_HELPFUL NOTES_:"
-                            for helper in info_dict["helpers"]:
-                                middle_text += f'\n- {helper}'
+                        # TODO: Call function that generates whole block per role. This will allow not showing the block, for instance, if a player should no longer wake up.
+                        special_text = 'Have a conversation with them in their individual role channel until they decide what to do.'
+                        
+                        # Fetch helpers that apply if this role AND other roles are active at the same time
+                        dynamic_helpers = get_dynamic_helpers(special_role, current_game_config['game_state'])
+                        
+                        # Print the above helpers as well as any that always apply if this role is in play
+                        if info_dict["helpers"] or dynamic_helpers:
+                            special_text += "\n_HELPFUL NOTES_:"
+                            for helper in dynamic_helpers + info_dict["helpers"]:
+                                special_text += f'\n- {helper}'
 
                     else:
-                        middle_text = "This player is dead, so just pause for a believable amount of time unless this is a role where it's obvious when they're dead."
+                        special_text = "This player is dead, so just pause for a believable amount of time unless this is a role where it's obvious when they're dead."
 
-                    steps.append(f"*'{special_role}, please wake up. {info_dict['prompt']}'* \n {middle_text}")
+                    steps.append(f"*'{special_role}, please wake up. {info_dict['prompt']}'* \n {special_text}")
             
             # Add final universal step
-            steps.append("If anyone died: *'Everyone wakes up, except for ___________.'*  Otherwise, just *'Everyone wakes up.'*\n If someone was targeted for a kill but saved, make up a story about their near miss now. \n *'Town meeting starts now.'* \n Instruct people to turn video and sound back on. \n\n _REMEMBER TO PRESS THE KILL BUTTON FOR ANY PLAYERS WHO HAVE DIED!_")
+            steps.append("If anyone died: *'Everyone wakes up, except for ___________.'*  Otherwise, just *'Everyone wakes up.'*\n Feel free to make up a death story. If someone was targeted for a kill but saved, you can also make up a story about their near miss. \n *'Town meeting starts now.'* \n Instruct people to turn video and sound back on. \n\n _REMEMBER TO PRESS THE KILL BUTTON FOR ANY PLAYERS WHO HAVE DIED!_")
 
             response_text = '\n\n'.join([f"*{idx + 1}.* {step}" for idx, step in enumerate(steps)])
             slack_client.views_open(
@@ -931,6 +942,23 @@ def parse_button_push(event, slack_client):
         'statusCode': 200,
         'body': ''
     }
+
+def get_dynamic_helpers(special_role, game_state):
+    helpers = []
+    alive_game_roles = [player_status['role'] for player_status in game_state.values() if player_status['alive']]
+
+    # Helper information for the moderator that depends on multiple roles being active at once
+    if special_role == FORTUNE_TELLER:
+        if ALPHA_WEREWOLF in alive_game_roles:
+            helpers.append("There is an Alpha Werewolf in play. *REMEMBER TO PRETEND THEY ARE A VILLAGER IF ASKED!*")
+
+    # TODO: It would be cleaner to just not wake the big bad werewolf up at all in this case.
+    if special_role == BIG_BAD_WEREWOLF:
+        if any([not player_status['alive'] for player_status in game_state.values() if player_status['role'] in ALL_SPECIAL_VILLAGERS]):
+            helpers.append("There are werewolves dead, so actually the Big Bad Werewolf does not have the ability to perform separate kills anymore.") 
+      
+    return helpers
+
 
 def end_vote(team_id, vote_record, slack_client):
     dynamodb.Table(WEREWOLF_TABLE_NAME).update_item(
@@ -1074,12 +1102,26 @@ def parse_view_submission(event, slack_client):
             }
         )
 
+        # Invite to the purgatory channel with other dead players
         slack_client.conversations_invite(channel=find_purgatory_channel_id(slack_client), users=victim_id)
 
-        # TODO: Could remove from werewolves channel. If so need to add back
+        # Remove from the werewolves channel if applicable
+        if game_state[victim_id]['role'] in ALL_WEREWOLVES:
+            try:
+                slack_client.conversations_kick(channel=find_werewolves_channel_id(slack_client), user=victim_id)
+            except:
+                pass
+        
+        # Archive special role channels if applicable
+        if game_state[victim_id]['role'] in ALL_SPECIAL_VILLAGERS + SPECIAL_WEREWOLVES:
+            try:
+                slack_client.conversations_archive(channel=find_role_channel_id(slack_client, game_state[victim_id]['role']))
+            except:
+                pass
 
         return {
-            "response_action": "clear"
+            "response_action": "update",
+            "view": create_kill_confirmation_modal(game_state[victim_id]['role'], game_state)
         }
 
     if event['view']['title']['text'] == urllib.parse.quote_plus(UNDO_KILL_PLAYER_TITLE):
@@ -1104,10 +1146,24 @@ def parse_view_submission(event, slack_client):
 
         slack_client.conversations_kick(channel=find_purgatory_channel_id(slack_client), user=victim_id)
 
-        # TODO: ADd back to werewolf channel if we start removing
+        # Add to the werewolves channel if applicable
+        if game_state[victim_id]['role'] in ALL_WEREWOLVES:
+            try:
+                slack_client.conversations_invite(channel=find_werewolves_channel_id(slack_client), users=victim_id)
+            except:
+                pass
+        
+        # Unarchive special role channel if applicable
+        if game_state[victim_id]['role'] in ALL_SPECIAL_VILLAGERS + SPECIAL_WEREWOLVES:
+            try:
+                slack_client.conversations_unarchive(channel=find_role_channel_id(slack_client,game_state[victim_id]['role']), as_user=True)
+            except:
+                pass
+
 
         return {
-            "response_action": "clear"
+            "response_action": "update",
+            "view": create_informational_modal("Undo Kill Confirmation", "The kill has been successfully undone.")
         }
 
     if event['view']['title']['text'] == urllib.parse.quote_plus(SUBMIT_VOTE_TITLE):
@@ -1150,8 +1206,14 @@ def parse_view_submission(event, slack_client):
         if len(updated_vote_record) == sum([player_state["alive"] for player_state in current_game_config["game_state"].values()]):
             end_vote(event['team']['id'], updated_vote_record, slack_client)
 
+        slack_client.chat_postMessage(
+            channel=current_game_config['moderator_id'],
+            text=f'*{get_member_name(event["user"]["id"], slack_client)}* has voted.',
+        )
+
         return {
-            "response_action": "clear"
+            "response_action": "update",
+            "view": create_informational_modal("Vote confirmation", "Your vote has been recorded.")
         }
     
     if event['view']['title']['text'] == urllib.parse.quote_plus(END_GAME_TITLE):
@@ -1170,6 +1232,11 @@ def parse_view_submission(event, slack_client):
         return {
             "response_action": "clear"
         }
+
+def find_role_channel_id(slack_client, role):
+    for channel in slack_client.conversations_list(limit=1000,types='private_channel').data['channels']:
+        if channel['name'] == derive_channel_name(role):
+            return channel['id']
 
 def archive_private_channels(slack_client, exceptions=None):
     if not exceptions:
@@ -1574,3 +1641,22 @@ def create_informational_modal(title, text):
             }
         ]
     }
+
+def create_kill_confirmation_modal(role, game_state):
+    alive_game_roles = [player_status['role'] for player_status in game_state.values() if player_status['alive']]
+
+    text = "The requested kill has been completed."
+
+    if role == HUNTER:
+        text += f"\n\n Note: this player was the {HUNTER}. Make sure they choose someone else to die with them."
+    
+    if role == BABYSITTER:
+        text += f"\n\n Note: this player was the {BABYSITTER}. If they died at night while protecting someone, that player should die too."
+
+    if role == ANCIENT:
+        text += f"\n\n Note: this player was the {ANCIENT}. If this was the first time they are being targeted by the werewolves, you should undo this kill."
+    
+    if BODYGUARD in alive_game_roles:
+        text += f"\n\n Note: There is a {BODYGUARD} still in play. If this player was killed at night while protected by the {BODYGUARD}, you should undo this kill and kill the {BODYGUARD} instead."
+    
+    return create_informational_modal("Kill Confirmation", text)
