@@ -129,7 +129,10 @@ SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_INFO = {
     },
     PROSTITUTE: {
         "prompt": "Who will you visit?",
-        "helpers": ["It is critical that they wake up before other special villagers, because whoever they choose will lose their powers for that night."]
+        "helpers": [
+            "It is critical that they wake up before other special villagers, because whoever they choose will lose their powers for that night.",
+            "Be sure to not allow their targeted player to use their powers.  Still wake the target up but privately tell them what has happened."
+        ]
     },
     JAILER: {
         "prompt": "Would you like to protect anyone?",
@@ -823,7 +826,7 @@ def parse_button_push(event, slack_client):
             steps.append("Say *'Night Falls'*.\n Instruct players to turn off video and sound if applicable.")
             steps.append("*'Werewolves, please wake up and decide who to kill'*.\n Force them to come to a consensus on who to kill in the werewolves slack channel.")
 
-            steps.append("If you are confident you can keep track of things, there are several special roles below, AND YOU ARE SURE THERE'S NO IMPORTANCE TO THE ORDER OF THE REMAINING WAKEUPS, you can now prompt them all to send information to you in parallel: 'Will the X,Y and Z please wake up and tell me what they'd like to do in their channels.' Otherwise just proceed to the next step and go one-by-one.  Either way, please remember to read the helper notes for each character as you process their information.")
+            steps.append("Optional: If you are confident you can keep track of things, there are several special roles below, AND YOU ARE SURE THERE'S NO IMPORTANCE TO THE ORDER OF THE REMAINING WAKEUPS, you can now prompt all special players to send information to you in parallel: *'Will the X,Y and Z please wake up and tell me what they'd like to do in their channels.'* Otherwise just proceed to the next step and go one-by-one. Either way, please remember to read the helper notes for each character as you process their information.")
 
             alive_game_roles = [player_status['role'] for player_status in current_game_config['game_state'].values() if player_status['alive']]
 
@@ -849,7 +852,7 @@ def parse_button_push(event, slack_client):
                     steps.append(f"*'{special_role}, please wake up. {info_dict['prompt']}'* \n {special_text}")
             
             # Add final universal step
-            steps.append("If anyone died: *'Everyone wakes up, except for ___________.'*  Otherwise, just *'Everyone wakes up.'*\n Feel free to make up a death story. If someone was targeted for a kill but saved, you can also make up a story about their near miss. \n *'Town meeting starts now.'* \n Instruct people to turn video and sound back on. \n\n _REMEMBER TO PRESS THE KILL BUTTON FOR ANY PLAYERS WHO HAVE DIED!_")
+            steps.append("If anyone died: *'Everyone wakes up, except for ___________.'* Otherwise, just *'Everyone wakes up.'*\n Feel free to make up a death story if applicable. If someone was targeted for a kill but saved, you can also make up a story about their near miss. \n *'Town meeting starts now.'* \n Instruct people to turn video and sound back on. \n\n _REMEMBER TO PRESS THE KILL BUTTON FOR ANY PLAYERS WHO HAVE DIED!_")
 
             response_text = '\n\n'.join([f"*{idx + 1}.* {step}" for idx, step in enumerate(steps)])
             slack_client.views_open(
