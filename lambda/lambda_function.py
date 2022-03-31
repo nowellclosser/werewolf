@@ -115,7 +115,7 @@ SHORT_DESCRIPTIONS = {
 }
 
 
-# This tracks the wake-up priority order, prompt, and helfpul info for nighttime the moderator for each applicable character.
+# This tracks the wake-up priority order, prompt, and helfpul info for the moderator at nighttime for each applicable character.
 # More dynamic helper info that depends on the roles in the game will be generated later.
 SPECIAL_ROLE_WAKE_UP_PRIORITY_AND_INFO = {
     # CURSED_WOLF_FATHER: 
@@ -1262,6 +1262,7 @@ def create_or_unarchive_private_channel(name, moderator_id, bot_id, slack_client
                 remove_players_from_channel(channel['id'], moderator_id, bot_id, slack_client)
             return channel['id']
 
+    # Otherwise create it
     creation_response = slack_client.conversations_create(
         name=name,
         is_private=True,
